@@ -11,6 +11,9 @@ import { FaHeart, FaStar } from "react-icons/fa";
 import "react-calendar/dist/Calendar.css";
 import Head from "next/head";
 import Link from "next/link";
+import { useWishlist } from "../../context/WishlistContext";
+import { useFavorites } from "../../context/FavoritesContext";
+
 
 export default function ProductDetailPage() {
   const router = useRouter();
@@ -18,12 +21,12 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState(null);
   const [rentalDetails, setRentalDetails] = useState({});
   const [wishlistAdded, setWishlistAdded] = useState(false);
-  const [wishlist, setWishlist] = useState([]); 
-  const [favorites, setFavorites] = useState([]); // ✅ Store favorited items
-  const [bookingCount, setBookingCount] = useState(0);
-const [isBooking, setIsBooking] = useState(false); // ✅ To show button animation
+  const { wishlist, toggleWishlist, setWishlist } = useWishlist(); // ✅ Use Wishlist Context
+  const { favorites, toggleFavorite, setFavorites } = useFavorites(); // ✅ Use Favorites Context
+  const [bookingCount, updateBookingCount] = useState(0);
+const [isBooking, setIsBooking] = useState(false);
 
-  
+
 
   // ✅ Fetch product details by ID
   useEffect(() => {
@@ -39,80 +42,49 @@ const [isBooking, setIsBooking] = useState(false); // ✅ To show button animati
     }
   }, [id]);
 
-  // ✅ Fetch user's favorite items
-  useEffect(() => {
-    const fetchFavorites = async () => {
+ // ✅ Fetch user's favorite items
+useEffect(() => {
+  const fetchFavorites = async () => {
       const token = localStorage.getItem("token");
       if (!token) return; // ✅ Skip if user isn't logged in
 
       try {
-        const response = await axios.get("http://127.0.0.1:8000/api/favorites", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+          const response = await axios.get("http://127.0.0.1:8000/api/favorites", {
+              headers: { Authorization: `Bearer ${token}` },
+          });
 
-        if (response.data.success) {
-          setFavorites(response.data.data.map((item) => item.product_id)); // ✅ Store favorite product IDs
-        }
+          if (response.data.success) {
+              setFavorites(response.data.data.map((item) => item.product_id)); // ✅ Now setFavorites is defined
+          }
       } catch (error) {
-        console.error("Error fetching favorites:", error);
+          console.error("Error fetching favorites:", error);
       }
-    };
+  };
 
-    fetchFavorites();
-  }, []);
+  fetchFavorites();
+}, [setFavorites]); // ✅ Include setFavorites as a dependency
 
-  // ✅ Fetch wishlist items (same logic as favorites)
+// ✅ Fetch wishlist items
 useEffect(() => {
   const fetchWishlist = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return; // ✅ Skip if not logged in
+      const token = localStorage.getItem("token");
+      if (!token) return; // ✅ Skip if not logged in
 
-    try {
-      const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      try {
+          const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
+              headers: { Authorization: `Bearer ${token}` },
+          });
 
-      if (response.data.success) {
-        setWishlist(response.data.data.map((item) => item.product_id)); // ✅ Store wishlist product IDs
+          if (response.data.success) {
+              setWishlist(response.data.data.map((item) => item.product_id)); // ✅ Now setWishlist is defined
+          }
+      } catch (error) {
+          console.error("Error fetching wishlist:", error);
       }
-    } catch (error) {
-      console.error("Error fetching wishlist:", error);
-    }
   };
 
   fetchWishlist();
-}, []);
-
-const toggleWishlist = async (productId) => {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    alert("⚠ You must be logged in to modify your wishlist.");
-    return;
-  }
-
-  const isAlreadyInWishlist = wishlist.includes(productId);
-
-  try {
-    if (isAlreadyInWishlist) {
-      await axios.delete(`http://127.0.0.1:8000/api/wishlist/${productId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setWishlist(wishlist.filter((id) => id !== productId)); // ✅ Remove from state
-      alert("❌ Removed from wishlist!");
-    } else {
-      await axios.post(
-        "http://127.0.0.1:8000/api/wishlist",
-        { product_id: productId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setWishlist([...wishlist, productId]); // ✅ Add to state
-      alert("✅ Added to wishlist!");
-    }
-  } catch (error) {
-    console.error("Error modifying wishlist:", error);
-    alert("❌ An error occurred.");
-  }
-};
+}, [setWishlist]); // ✅ Include setWishlist as a dependency
 
 
   // ✅ Add product to wishlist
@@ -271,11 +243,8 @@ const toggleWishlist = async (productId) => {
         if (response.data.success) {
             const refNumber = response.data.booking.reference_number;
 
-            // ✅ Update booking count in localStorage
-            let currentCount = parseInt(localStorage.getItem("bookingCount") || "0", 10);
-            let targetCount = currentCount + 1;
-            localStorage.setItem("bookingCount", targetCount);
-            window.dispatchEvent(new Event("storage")); // ✅ Trigger update event
+            // ✅ Update booking count in global state & localStorage
+            updateBookingCount(bookingCount + 1);
 
             setTimeout(() => {
                 setIsBooking(false); // ✅ Stop animation
@@ -291,6 +260,7 @@ const toggleWishlist = async (productId) => {
         setIsBooking(false);
     }
 };
+
   
   useEffect(() => {
     if (id) {
@@ -358,15 +328,14 @@ const isDateAvailable = (date) => {
               <div className="flex space-x-4">
                   {/* Wishlist Button */}
                   <button onClick={() => toggleWishlist(product.id)}>
-                  <FaHeart
-                    className={`text-2xl transition ${
-                      wishlist.includes(product.id) ? "text-red-600" : "text-gray-500 hover:text-red-500"
-                    }`}
-                  />
-                </button>
+                    <FaHeart
+                      className={`text-2xl transition ${
+                        wishlist.includes(product.id) ? "text-red-600" : "text-gray-500 hover:text-red-500"
+                      }`}
+                    />
+                  </button>
 
-                  {/* Favorites Button */}
-                  <button onClick={() => addToFavorites(product.id)}>
+                  <button onClick={() => toggleFavorite(product.id)}>
                     <FaStar
                       className={`text-2xl transition ${
                         favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500 hover:text-yellow-400"

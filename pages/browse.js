@@ -1,29 +1,73 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import AuthGuard from "../components/AuthGuard";
 import Image from "next/image";
+import Calendar from "react-calendar";
+import AuthGuard from "../components/AuthGuard";
+import "react-calendar/dist/Calendar.css";
 import "../../resources/css/styles/global.css";
 import Link from "next/link";
 import { FaHeart, FaStar } from "react-icons/fa";
 import axios from "axios";
-import Navbar from "../components/Navbar"; 
+import Navbar from "../components/Navbar"; // Adjust path if needed
 import Head from "next/head";
+import { useWishlist } from "../context/WishlistContext";
+import { useFavorites } from "../context/FavoritesContext";
 
 
 export default function BrowsePage() {
+    
     const [isOpen, setIsOpen] = useState(false);
-    const [products, setProducts] = useState([]);
-    const [categories, setCategories] = useState([]);
-    const [priceRange, setPriceRange] = useState(15000); 
-    const [rentalDetails, setRentalDetails] = useState({});
-    const [selectedCategories, setSelectedCategories] = useState([]);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [wishlist, setWishlist] = useState([]); 
+    const { setFavorites, addToFavorites, favorites } = useFavorites(); // ✅ Use Favorites Context
 
-    const itemsPerPage = 6;
-    const [favorites, setFavorites] = useState([]); // State to store favorited items
+    // State to control the calendar visibility for each gown
+    const [calendarOpen, setCalendarOpen] = useState({});
+
+    const [products, setProducts] = useState([]);
+
+    const [categories, setCategories] = useState([]);
+
+
+    const [priceRange, setPriceRange] = useState(15000); // Default max price
+    const [rentalDetails, setRentalDetails] = useState({});
+
+
+    const [selectedCategories, setSelectedCategories] = useState([]); // Tracks selected categories
+
+    const [searchQuery, setSearchQuery] = useState("");
+    const { setWishlist, addToWishlist, wishlist } = useWishlist();
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 6; // Adjust the number of products per page
+
+    // const calculatePrice = (productPrice, startDate, endDate) => {
+    //     if (!startDate || !endDate) return productPrice; // If no dates selected, return base price
+    
+    //     const start = new Date(startDate);
+    //     const end = new Date(endDate);
+    //     const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)); // Calculate days difference
+    
+    //     let addedPrice = 0;
+    //     if (diffDays >= 4 && diffDays <= 6) {
+    //         addedPrice = 980.00; // Price for 4, 5, and 6 days
+    //     } else if (diffDays === 7) {
+    //         addedPrice = 1000.00; // Price for 7 days
+    //     } else if (diffDays > 7) {
+    //         addedPrice = 1000.00 + (diffDays - 7) * 50; // Extra ₱50 per day after 7 days
+    //     }
+    
+    //     return productPrice + addedPrice; // ✅ Add product price + rental fee
+    // };    
+    
+
+    // // Sample available dates for each gown
+    // const availableDates = {
+    //     "Elegant Wedding Gown": ["2025-03-10", "2025-03-15", "2025-03-20"],
+    //     "Red Carpet Dress": ["2025-03-12", "2025-03-18", "2025-03-25"],
+    //     "Fairy Tale Ball Gown": ["2025-03-11", "2025-03-14", "2025-03-22"],
+    //     "Vintage Lace Dress": ["2025-03-09", "2025-03-19", "2025-03-28"],
+    //     "Simple & Chic Dress": ["2025-03-13", "2025-03-17", "2025-03-26"],
+    // };
 
     // ✅ Fetch existing favorites when component loads
     useEffect(() => {
@@ -47,137 +91,56 @@ export default function BrowsePage() {
         fetchFavorites();
     }, []);
     
-    // ✅ Add product to favorites
-    const addToFavorites = async (productId) => {
-        const token = localStorage.getItem("token");
-    
-        if (!token) {
-            alert("⚠ You must be logged in to add favorites.");
-            return;
-        }
-    
-        // ✅ Check if already in favorites
-        if (favorites.includes(productId)) {
-            alert("✅ This item is already in your favorites.");
-            return;
-        }
-    
-        try {
-            const response = await axios.post(
-                "http://127.0.0.1:8000/api/favorites",
-                { product_id: productId },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-    
-            if (response.data.success) {
-                setFavorites([...favorites, productId]); // ✅ Update UI dynamically
-                alert("✅ Added to favorites successfully!");
-            }
-        } catch (error) {
-            console.error("Error adding to favorites:", error);
-    
-            if (error.response) {
-                if (error.response.status === 409) {
-                    alert("⚠ This item is already in your favorites.");
-                    setFavorites([...favorites, productId]); // ✅ Ensure UI updates
-                } else if (error.response.status === 401) {
-                    alert("⚠ You must be logged in to add items to favorites.");
-                } else {
-                    alert(error.response.data.message || "❌ An error occurred.");
-                }
-            } else {
-                alert("❌ Network error. Check your connection.");
-            }
-        }
-    };
-    
-
     useEffect(() => {
         axios.get("http://127.0.0.1:8000/api/products")
             .then((response) => {
-                const formattedProducts = response.data.data.map(product => ({
-                    ...product,
-                    price: parseFloat(product.price) || 0,
-                }));
-                setProducts(formattedProducts);
-
-                const uniqueCategories = [...new Set(formattedProducts.map(product => product.category))];
-                setCategories(uniqueCategories);
+                if (response.data && Array.isArray(response.data.data)) {
+                    setProducts(response.data.data);
+                } else {
+                    setProducts([]);
+                }
             })
-            .catch((error) => console.error("Error fetching data:", error));
+            .catch((error) => {
+                console.error("Error fetching products:", error);
+                setProducts([]);
+            });
     }, []);
 
-    const addToWishlist = async (productId) => {
-        const token = localStorage.getItem("token");
-    
-        if (!token) {
-            alert("You must be logged in to add items to your wishlist.");
-            return;
-        }
-    
-        // ✅ Check if the product is already in the wishlist
-        if (wishlist.includes(productId)) {
-            alert("This item is already in your wishlist.");
-            return; // 🔴 STOP HERE! No request is sent.
-        }
-    
-        try {
-            const response = await axios.post(
-                "http://127.0.0.1:8000/api/wishlist",
-                { product_id: productId },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-    
-            if (response.data.success) {
-                setWishlist([...wishlist, productId]); // ✅ Update state
-                alert("Added to wishlist successfully!");
-            }
-        } catch (error) {
-            console.error("Error adding to wishlist:", error);
-    
-            if (error.response) {
-                if (error.response.status === 409) {
-                    alert("This item is already in your wishlist.");
-                    setWishlist([...wishlist, productId]); // ✅ Ensure UI updates
-                } else if (error.response.status === 401) {
-                    alert("You must be logged in to add items to your wishlist.");
-                } else {
-                    alert(error.response.data.message || "An error occurred.");
-                }
-            } else {
-                alert("Network error. Check your connection.");
-            }
-        }
-    };
-    
-    // ✅ Fetch wishlist items when the component mounts
     useEffect(() => {
         const fetchWishlist = async () => {
             const token = localStorage.getItem("token");
-    
             if (!token) return;
-    
+
             try {
                 const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-    
+
                 if (response.data.success) {
-                    setWishlist(response.data.data.map(item => item.product_id)); // ✅ Store wishlist product IDs
+                    setWishlist(response.data.data.map(item => item.product_id)); // ✅ No more error
                 }
             } catch (error) {
                 console.error("Error fetching wishlist:", error);
             }
         };
-    
+
         fetchWishlist();
-    }, []);
+    }, [setWishlist]); 
     
+
+    // Toggle calendar visibility for each gown
+    const toggleCalendar = (gownId) => {
+        setCalendarOpen((prev) => ({
+            ...prev,
+            [gownId]: !prev[gownId]
+        }));
+    };
+
     const handleCategoryChange = (category) => {
         setSelectedCategories((prev) => 
             prev.includes(category)
-                ? prev.filter((cat) => cat !== category)
-                : [...prev, category]
+                ? prev.filter((cat) => cat !== category) // Remove if already selected
+                : [...prev, category] // Add if not selected
         );
     };
 
@@ -190,7 +153,7 @@ export default function BrowsePage() {
                     [type]: value 
                 } 
             };
-
+    
             if (updatedDetails[productId].startDate && updatedDetails[productId].endDate) {
                 updatedDetails[productId].totalPrice = calculatePrice(
                     productPrice, 
@@ -198,19 +161,22 @@ export default function BrowsePage() {
                     updatedDetails[productId].endDate
                 );
             }
-
+    
             return updatedDetails;
         });
     };
-
+    
+    
+    
     const filteredProducts = products.filter((product) =>
         (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
         product.price <= priceRange &&
         (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        (product.category ? product.category.toLowerCase().includes(searchQuery.toLowerCase()) : false) || 
-        (product.description ? product.description.toLowerCase().includes(searchQuery.toLowerCase()) : false))
+         (product.category ? product.category.toLowerCase().includes(searchQuery.toLowerCase()) : false) || 
+         (product.description ? product.description.toLowerCase().includes(searchQuery.toLowerCase()) : false))
     );
-
+    
+    
     const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
@@ -332,45 +298,28 @@ export default function BrowsePage() {
                                         </button>
                                         </Link>
 
-                                        {/* Wishlist & Favorite Icons (No Redirect) */}
-                                        <div className="flex justify-center space-x-4 mt-3 md:mt-4">
+                                           {/* Wishlist & Favorite Icons (No Redirect) */}
+                                           <div className="flex justify-center space-x-4 mt-3 md:mt-4">
                                         
-                                             
-                                      {/* Wishlist Icon */}
-                                        <button 
-                                            onClick={() => addToWishlist(product.id)} 
-                                            className="relative group"
-                                        >
-                                            {/* Change heart color if already in wishlist */}
-                                            <FaHeart 
-                                                className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                            />
-                                            
-                                            {/* Tooltip for Wishlist */}
-                                            <div
-                                                className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md"
-                                            >
-                                                {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
-                                                <div className="tooltip-arrow absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-x-transparent border-b-8 border-t-0 border-b-gray-800"></div>
-                                            </div>
-                                        </button>
+                                        {/* Wishlist Icon */}
+                                        <button onClick={() => addToWishlist(product.id)} className="relative group">
+                                <FaHeart 
+                                    className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                />
+                                <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
+                                    {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
+                                </div>
+                            </button>
 
-
-                                       {/* Favorite Icon */} 
-                                        <button 
-                                            onClick={() => addToFavorites(product.id)} 
-                                            className="relative group"
-                                        >
-                                            {/* Change star color if already in favorites */}
-                                            <FaStar className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} />
-                                            
-                                            {/* Tooltip for Favorites */}
-                                            <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
-                                                {favorites.includes(product.id) ? "Already in Favorites" : "Add to Favorites"}
-                                                <div className="tooltip-arrow absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-x-transparent border-b-8 border-t-0 border-b-gray-800"></div>
-                                            </div>
-                                        </button>
-
+                                    {/* Favorite Icon */} 
+                                    <button onClick={() => addToFavorites(product.id)} className="relative group">
+                                        <FaStar 
+                                            className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                        />
+                                        <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
+                                            {favorites.includes(product.id) ? "Already in Favorites" : "Add to Favorites"}
+                                        </div>
+                                    </button>
                                         
                                         </div>
                                     </div>

@@ -62,50 +62,63 @@ export default function BookingPage() {
   };
 
   const handleUpload = async () => {
-  if (!gcashReceipt) {
-    alert("⚠ Please select a receipt image to upload.");
-    return;
-  }
-
-  if (!booking?.id) {
-    alert("❌ Booking ID is missing!");
-    return;
-  }
-
-  setUploading(true);
-  const formData = new FormData();
-  formData.append("receipt", gcashReceipt);
-  formData.append("booking_id", booking.id);
-
-  try {
-    const token = localStorage.getItem("token");
-    const response = await axios.post(
-      "http://127.0.0.1:8000/api/bookings/upload-receipt",
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-
-    if (response.data.success) {
-      const goToHistory = window.confirm("✅ Booking is being processed with your receipt. Would you like to go to Booking History?");
-      if (goToHistory) {
-        router.push("/bookhistory"); // ✅ Redirects to booking history
-      }
-    } else {
-      alert("❌ Failed to upload receipt. Please try again.");
+    if (!gcashReceipt) {
+        alert("⚠ Please select a receipt image to upload.");
+        return;
     }
-  } catch (error) {
-    console.error("Error uploading receipt:", error);
-    alert("❌ An error occurred while uploading. Please try again.");
-  } finally {
-    setUploading(false);
-  }
+
+    // ✅ Check file size before uploading (2MB limit)
+    const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+    if (gcashReceipt.size > maxSize) {
+        window.alert("⚠ File is too large! Please upload an image smaller than 2MB.");
+        return;
+    }
+
+    if (!booking?.id) {
+        alert("❌ Booking ID is missing!");
+        return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("receipt", gcashReceipt);
+    formData.append("booking_id", booking.id); // ✅ Ensure booking_id is included
+
+    try {
+        const token = localStorage.getItem("token");
+        const response = await axios.post(
+            "http://127.0.0.1:8000/api/bookings/upload-receipt",
+            formData,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "multipart/form-data",
+                },
+            }
+        );
+
+        if (response.data.success) {
+            alert("✅ Receipt uploaded successfully!");
+            router.push("/bookhistory"); // ✅ Redirect to booking history
+        } else {
+            alert(response.data.message || "❌ Failed to upload receipt.");
+        }
+    } catch (error) {
+        console.error("Error uploading receipt:", error);
+
+        if (error.response?.status === 422) {
+            // ✅ Show a prompt instead of a runtime error
+            window.alert("⚠ Upload failed! Ensure your receipt is an image (jpg, png) and is within 2MB.");
+            console.error("Validation Errors:", error.response.data.errors); // ✅ Log errors
+        } else {
+            alert(error.response?.data?.message || "❌ An error occurred while uploading.");
+        }
+    } finally {
+        setUploading(false);
+    }
 };
 
+  
 
   const handleCancelBooking = async () => {
     if (!confirm("Are you sure you want to cancel this booking?")) return;

@@ -6,14 +6,20 @@ import Image from "next/image";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { Heart, Star, ShoppingCart, User, LogOut } from "lucide-react"; 
+import { useWishlist } from "../context/WishlistContext";
+import { useFavorites } from "../context/FavoritesContext";
+import { useBook } from "../context/BookContext"; // ✅ Add this line
+
 
 export default function Navbar() {
+    const { wishlist } = useWishlist() || { wishlist: [] };
+    const { favorites } = useFavorites() || { favorites: [] }; 
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [wishlistCount, setWishlistCount] = useState(0);
     const [favoritesCount, setFavoritesCount] = useState(0);
     const [user, setUser] = useState(null);
-    const [bookingCount, setBookingCount] = useState(0);
+    const { bookingCount } = useBook();
 
     // ✅ Function to Manually Update Wishlist Count in Real Time
     const updateWishlist = () => {
@@ -138,23 +144,23 @@ export default function Navbar() {
                     <Link href="/wishlist" className="text-gray-700 hover:text-pink-600 flex items-center">
                         <Heart className="w-5 h-5 mr-1" /> Wishlist
                         <span className="ml-2 bg-pink-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                            {wishlistCount}
+                            {wishlist ? wishlist.length : 0} {/* ✅ Prevent undefined errors */}
                         </span>
                     </Link>
 
                     <Link href="/favorites" className="text-gray-700 hover:text-pink-600 flex items-center">
-                        <Star className="w-5 h-5 mr-1" /> Favorites
-                        <span className="ml-2 bg-pink-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                            {favoritesCount}
-                        </span>
-                    </Link>
+                <Star className="w-5 h-5 mr-1" /> Favorites
+                <span className="ml-2 bg-pink-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    {favorites.length}
+                </span>
+            </Link>
 
-                    <Link href="/bookhistory" className="text-gray-700 hover:text-pink-600 flex items-center">
-                        <ShoppingCart className="w-5 h-5 mr-1" /> Booking History
-                        <span className="ml-2 bg-pink-600 text-white text-xs font-bold px-2 py-1 rounded-full animate-bounce">
-                            {bookingCount}
-                        </span>
-                    </Link>
+            <Link href="/bookhistory" className="text-gray-700 hover:text-pink-600 flex items-center">
+                    <ShoppingCart className="w-5 h-5 mr-1" /> Booking History
+                    <span className="ml-2 bg-pink-600 text-white text-xs font-bold px-2 py-1 rounded-full animate-bounce">
+                        {bookingCount} {/* ✅ Correct count from API */}
+                    </span>
+                </Link>
 
                     <Link href="/profile" className="text-gray-700 hover:text-pink-600 flex items-center space-x-2">
                         <User className="w-5 h-5" />

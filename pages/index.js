@@ -11,11 +11,14 @@ import { FaHeart, FaStar } from "react-icons/fa";
 import axios from "axios";
 import Navbar from "../components/Navbar"; // Adjust path if needed
 import Head from "next/head";
-
+import { useWishlist } from "../context/WishlistContext";
+import { useFavorites } from "../context/FavoritesContext";
 
 
 export default function HomePage() {
+    
     const [isOpen, setIsOpen] = useState(false);
+    const { setFavorites, addToFavorites, favorites } = useFavorites(); // ✅ Use Favorites Context
 
     // State to control the calendar visibility for each gown
     const [calendarOpen, setCalendarOpen] = useState({});
@@ -28,15 +31,14 @@ export default function HomePage() {
     const [priceRange, setPriceRange] = useState(15000); // Default max price
     const [rentalDetails, setRentalDetails] = useState({});
 
-    const [wishlist, setWishlist] = useState([]); 
 
     const [selectedCategories, setSelectedCategories] = useState([]); // Tracks selected categories
 
     const [searchQuery, setSearchQuery] = useState("");
+    const { setWishlist, addToWishlist, wishlist } = useWishlist();
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6; // Adjust the number of products per page
-    const [favorites, setFavorites] = useState([]); // State to store favorited items
 
     // const calculatePrice = (productPrice, startDate, endDate) => {
     //     if (!startDate || !endDate) return productPrice; // If no dates selected, return base price
@@ -89,68 +91,12 @@ export default function HomePage() {
         fetchFavorites();
     }, []);
     
-    // ✅ Add product to favorites
-    const addToFavorites = async (productId) => {
-        const token = localStorage.getItem("token");
-    
-        if (!token) {
-            alert("⚠ You must be logged in to add favorites.");
-            return;
-        }
-    
-        // ✅ Check if already in favorites
-        if (favorites.includes(productId)) {
-            alert("✅ This item is already in your favorites.");
-            return;
-        }
-    
-        try {
-            const response = await axios.post(
-                "http://127.0.0.1:8000/api/favorites",
-                { product_id: productId },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-    
-            if (response.data.success) {
-                setFavorites([...favorites, productId]); // ✅ Update UI dynamically
-                alert("✅ Added to favorites successfully!");
-            }
-        } catch (error) {
-            console.error("Error adding to favorites:", error);
-    
-            if (error.response) {
-                if (error.response.status === 409) {
-                    alert("⚠ This item is already in your favorites.");
-                    setFavorites([...favorites, productId]); // ✅ Ensure UI updates
-                } else if (error.response.status === 401) {
-                    alert("⚠ You must be logged in to add items to favorites.");
-                } else {
-                    alert(error.response.data.message || "❌ An error occurred.");
-                }
-            } else {
-                alert("❌ Network error. Check your connection.");
-            }
-        }
-    };
-
     useEffect(() => {
         axios.get("http://127.0.0.1:8000/api/products")
             .then((response) => {
-                console.log("API Response:", response.data); // ✅ Debugging log
-    
-                // ✅ Ensure response has "data" and it's an array
                 if (response.data && Array.isArray(response.data.data)) {
-                    const formattedProducts = response.data.data.map(product => ({
-                        ...product,
-                        price: parseFloat(product.price) || 0, // ✅ Convert price to number
-                    }));
-                    setProducts(formattedProducts);
-    
-                    // ✅ Extract unique categories from products
-                    const uniqueCategories = [...new Set(formattedProducts.map(product => product.category))];
-                    setCategories(uniqueCategories);
+                    setProducts(response.data.data);
                 } else {
-                    console.error("Unexpected API response format:", response.data);
                     setProducts([]);
                 }
             })
@@ -159,72 +105,27 @@ export default function HomePage() {
                 setProducts([]);
             });
     }, []);
-    
-    const addToWishlist = async (productId) => {
-        const token = localStorage.getItem("token");
-    
-        if (!token) {
-            alert("You must be logged in to add items to your wishlist.");
-            return;
-        }
-    
-        // ✅ Check if the product is already in the wishlist
-        if (wishlist.includes(productId)) {
-            alert("This item is already in your wishlist.");
-            return; // 🔴 STOP HERE! No request is sent.
-        }
-    
-        try {
-            const response = await axios.post(
-                "http://127.0.0.1:8000/api/wishlist",
-                { product_id: productId },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-    
-            if (response.data.success) {
-                setWishlist([...wishlist, productId]); // ✅ Update state
-                alert("Added to wishlist successfully!");
-            }
-        } catch (error) {
-            console.error("Error adding to wishlist:", error);
-    
-            if (error.response) {
-                if (error.response.status === 409) {
-                    alert("This item is already in your wishlist.");
-                    setWishlist([...wishlist, productId]); // ✅ Ensure UI updates
-                } else if (error.response.status === 401) {
-                    alert("You must be logged in to add items to your wishlist.");
-                } else {
-                    alert(error.response.data.message || "An error occurred.");
-                }
-            } else {
-                alert("Network error. Check your connection.");
-            }
-        }
-    };
-    
-    // ✅ Fetch wishlist items when the component mounts
+
     useEffect(() => {
         const fetchWishlist = async () => {
             const token = localStorage.getItem("token");
-    
             if (!token) return;
-    
+
             try {
                 const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-    
+
                 if (response.data.success) {
-                    setWishlist(response.data.data.map(item => item.product_id)); // ✅ Store wishlist product IDs
+                    setWishlist(response.data.data.map(item => item.product_id)); // ✅ No more error
                 }
             } catch (error) {
                 console.error("Error fetching wishlist:", error);
             }
         };
-    
+
         fetchWishlist();
-    }, []);
+    }, [setWishlist]); 
     
 
     // Toggle calendar visibility for each gown
@@ -425,38 +326,24 @@ export default function HomePage() {
                                         <div className="flex justify-center space-x-4 mt-3 md:mt-4">
                                         
                                             {/* Wishlist Icon */}
-                                            <button 
-                                                onClick={() => addToWishlist(product.id)} 
-                                                className="relative group"
-                                            >
-                                                {/* Change heart color if already in wishlist */}
-                                                <FaHeart 
-                                                    className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                                />
-                                                
-                                                {/* Tooltip for Wishlist */}
-                                                <div
-                                                    className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md"
-                                                >
-                                                    {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
-                                                    <div className="tooltip-arrow absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-x-transparent border-b-8 border-t-0 border-b-gray-800"></div>
-                                                </div>
-                                            </button>
+                                            <button onClick={() => addToWishlist(product.id)} className="relative group">
+                                    <FaHeart 
+                                        className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                    />
+                                    <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
+                                        {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
+                                    </div>
+                                </button>
 
                                        {/* Favorite Icon */} 
-                                        <button 
-                                            onClick={() => addToFavorites(product.id)} 
-                                            className="relative group"
-                                        >
-                                            {/* Change star color if already in favorites */}
-                                            <FaStar className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} />
-                                            
-                                            {/* Tooltip for Favorites */}
-                                            <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
-                                                {favorites.includes(product.id) ? "Already in Favorites" : "Add to Favorites"}
-                                                <div className="tooltip-arrow absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-x-transparent border-b-8 border-t-0 border-b-gray-800"></div>
-                                            </div>
-                                        </button>
+                                       <button onClick={() => addToFavorites(product.id)} className="relative group">
+                                        <FaStar 
+                                            className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                        />
+                                        <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
+                                            {favorites.includes(product.id) ? "Already in Favorites" : "Add to Favorites"}
+                                        </div>
+                                    </button>
                                         
                                         </div>
                                     </div>
