@@ -8,17 +8,38 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ChatController;
 
 Route::middleware('auth:api')->group(function () {
+    Route::get('/chats/{receiverId}', [ChatController::class, 'index']); // Get chat messages
+    Route::post('/chats', [ChatController::class, 'store']); // Send message
+});
+
+
+Route::middleware('auth:api')->group(function () {
+    // ✅ Booking Routes
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::get('/bookings/{referenceNumber}', [BookingController::class, 'show']);
     Route::post('/bookings/upload-receipt', [BookingController::class, 'uploadReceipt']);
-    Route::get('/user/bookings', [BookingController::class, 'userBookings']); // ✅ Fetch user's bookings
+    Route::get('/user/bookings', [BookingController::class, 'userBookings']);
     Route::patch('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
-    
+    Route::get('/bookings', [BookingController::class, 'index']);
 });
 
-Route::middleware('auth:api')->get('/dashboard/stats', [DashboardController::class, 'getStats']);
+Route::middleware('auth:api')->group(function () {
+    Route::get('/dashboard/stats', [DashboardController::class, 'getStats']); // Fetch dashboard stats
+    Route::get('/products', [DashboardController::class, 'getProducts']); // Fetch products
+    Route::get('/inventory', [DashboardController::class, 'getInventory']); // Fetch inventory list
+    Route::get('/inventory/{id}', [DashboardController::class, 'getInventoryItem']); // Fetch single item
+    Route::post('/inventory', [DashboardController::class, 'addInventory']); // Add new item
+    Route::put('/inventory/{id}', [DashboardController::class, 'updateInventory']); // Update item
+    Route::delete('/inventory/{id}', [DashboardController::class, 'deleteInventory']); // Delete item
+    Route::get('/orders', [DashboardController::class, 'index']); // Fetch all orders
+    Route::put('/orders/{id}/update-status', [DashboardController::class, 'updateStatus']); // Update order status
+    
+
+});
 
 Route::middleware('auth:api')->get('/bookings/count', function (Request $request) {
     return response()->json([

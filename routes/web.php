@@ -1,18 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Events\MessageSent;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "web" middleware group. Make something great!
-|
-*/
-
-Route::get('/', function () {
-    return view('welcome');
+Route::get('/test-broadcast', function () {
+    event(new MessageSent(auth()->user(), 'Hello, this is a test message!'));
+    return 'Event has been sent!';
 });
