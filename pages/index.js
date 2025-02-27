@@ -293,17 +293,18 @@ export default function HomePage() {
                                         {/* Product Image (Click redirects to product page) */}
                                         <Link href={`/products/${product.id}`} className="block">
                                         <div className="relative w-full h-48 md:h-64 flex justify-center items-center">
-                                            {product.image ? (
-                                            <Image 
-                                                src={product.image} 
-                                                alt={product.name}
-                                                width={200}
-                                                height={400}
-                                                className="rounded-lg object-cover"
-                                            />
+                                        {product.image ? (
+                                        <Image 
+                                         src={`http://127.0.0.1:8000/storage/${product.image}`} 
+                                         alt={product.name}
+                                         width={200}
+                                         height={400}
+                                         className="rounded-lg object-cover"
+                                       />
                                             ) : (
                                             <p>No Image Available</p>
                                             )}
+
                                         </div>
                                         </Link>
 

@@ -113,7 +113,6 @@ const handleUpload = async () => {
         setSelectedProduct(null);
     };
 
-    // ✅ Open Receipt Modal
     const handleShowReceipt = (receipt) => {
         if (!receipt) {
             alert("❌ No receipt found!");
@@ -122,6 +121,7 @@ const handleUpload = async () => {
         setReceiptUrl(`http://127.0.0.1:8000/storage/${receipt}`);
         setShowReceiptModal(true);
     };
+    
 
     // ✅ Close Receipt Modal
     const closeReceiptModal = () => {

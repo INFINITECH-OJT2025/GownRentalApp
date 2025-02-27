@@ -77,6 +77,7 @@ export default function OrdersPage() {
                 >
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
+                    <option value="canceled">Canceled</option>
                 </select>
             ),
         },

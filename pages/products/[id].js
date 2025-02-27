@@ -3,19 +3,22 @@
 import "../../../resources/css/styles/global.css";
 import Navbar from "../../components/Navbar";
 import AuthGuard from "../../components/AuthGuard";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/router";
 import Calendar from "react-calendar";
-import { FaHeart, FaStar } from "react-icons/fa";
+import { FaHeart, FaStar, FaCamera, FaTrash } from "react-icons/fa";
 import "react-calendar/dist/Calendar.css";
 import Head from "next/head";
 import Link from "next/link";
 import { useWishlist } from "../../context/WishlistContext";
 import { useFavorites } from "../../context/FavoritesContext";
-
+import * as poseDetection from "@tensorflow-models/pose-detection";
+import * as tf from "@tensorflow/tfjs";
 
 export default function ProductDetailPage() {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const router = useRouter();
   const { id } = router.query;
   const [product, setProduct] = useState(null);
@@ -24,9 +27,163 @@ export default function ProductDetailPage() {
   const { wishlist, toggleWishlist, setWishlist } = useWishlist(); // ✅ Use Wishlist Context
   const { favorites, toggleFavorite, setFavorites } = useFavorites(); // ✅ Use Favorites Context
   const [bookingCount, updateBookingCount] = useState(0);
-const [isBooking, setIsBooking] = useState(false);
+  const [isBooking, setIsBooking] = useState(false);
+  const [detector, setDetector] = useState(null);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+
+  useEffect(() => {
+    const setupCamera = async () => {
+      if (!videoRef.current) return;
+  
+      try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  
+          if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              videoRef.current.onloadedmetadata = () => {
+                  videoRef.current.play();
+                  setVideoLoaded(true); // ✅ Ensure video is loaded
+              };
+          }
+      } catch (err) {
+          console.error("🚨 Camera access denied:", err);
+      }
+  };
+  
+
+    const loadPoseDetection = async () => {
+      await tf.ready();
+      await tf.setBackend("webgl");
+  
+      const model = poseDetection.SupportedModels.MoveNet;
+      const newDetector = await poseDetection.createDetector(model, {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+      });
+  
+      console.log("✅ Pose Detector Loaded");
+      setDetector(newDetector);
+  };  
+
+    setupCamera();
+    loadPoseDetection();
+  }, []);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    const handleLoadedData = () => {
+      setVideoLoaded(true);
+    };
+
+    videoRef.current.addEventListener("loadeddata", handleLoadedData);
+    return () => videoRef.current?.removeEventListener("loadeddata", handleLoadedData);
+  }, []);
 
 
+  useEffect(() => {
+  if (!canvasRef.current || !videoRef.current || !detector || !videoLoaded) return;
+
+  const ctx = canvasRef.current.getContext("2d");
+  const gownImage = new Image();
+
+  if (product?.image_url) {
+    gownImage.src = product.image_url;
+  }
+
+  const adjustDressSize = async () => {
+    if (!videoRef.current || !canvasRef.current || !detector || !videoLoaded) return;
+  
+    const ctx = canvasRef.current.getContext("2d");
+    const gownImage = new Image();
+  
+    if (product?.image_url) {
+      gownImage.src = product.image_url;
+    }
+  
+    const video = videoRef.current;
+    const { videoWidth, videoHeight } = video;
+  
+    if (videoWidth === 0 || videoHeight === 0) return; // Prevent zero-size textures
+  
+    canvasRef.current.width = videoWidth;
+    canvasRef.current.height = videoHeight;
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+  
+    const poses = await detector.estimatePoses(video);
+    if (poses.length === 0) return;
+  
+    const keypoints = poses[0].keypoints;
+  
+    // ✅ Extract key points
+    const leftShoulder = keypoints.find(k => k.name === "left_shoulder");
+    const rightShoulder = keypoints.find(k => k.name === "right_shoulder");
+    const leftHip = keypoints.find(k => k.name === "left_hip");
+    const rightHip = keypoints.find(k => k.name === "right_hip");
+    const leftWaist = keypoints.find(k => k.name === "left_hip");  // Approximate waist
+    const rightWaist = keypoints.find(k => k.name === "right_hip"); // Approximate waist
+  
+    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip || !leftWaist || !rightWaist) return;
+  
+    // ✅ Calculate dynamic widths and height
+    const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x);
+    const waistWidth = Math.abs(rightWaist.x - leftWaist.x);
+    const bodyHeight = Math.abs(rightHip.y - leftShoulder.y);
+  
+    // ✅ Adjust dress size using both shoulder & waist width
+    const dressWidth = Math.max(shoulderWidth * 2.5, waistWidth * 3.0, videoWidth * 0.9);
+    const dressHeight = bodyHeight * 1.8; // Extend dress height
+  
+    // ✅ Leave Space at the Top
+    const centerX = videoWidth / 2; // Center horizontally
+    const topSpace = videoHeight * 0.15; // 15% space from the top
+    const yPos = topSpace; // Move dress down to fit properly
+  
+    // ✅ Draw the dynamically resized dress
+    if (gownImage.complete) {
+      ctx.drawImage(
+        gownImage,
+        centerX - dressWidth / 2, // Center horizontally
+        yPos,
+        dressWidth,
+        dressHeight
+      );
+    }
+  
+    requestAnimationFrame(adjustDressSize); // ✅ Keep updating in real-time
+  };
+    
+  
+
+  adjustDressSize();
+}, [product, detector, videoLoaded]);
+
+const [isCameraOn, setIsCameraOn] = useState(false);
+
+const startCamera = async () => {
+  if (!videoRef.current) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play();
+        setIsCameraOn(true); // ✅ Mark camera as ON
+        setVideoLoaded(true);
+      };
+    }
+  } catch (err) {
+    console.error("🚨 Camera access denied:", err);
+    alert("⚠ Please allow camera access in your browser settings.");
+  }
+};
+
+useEffect(() => {
+  if (isCameraOn) {
+    startCamera();
+  }
+}, [isCameraOn]);
 
   // ✅ Fetch product details by ID
   useEffect(() => {
@@ -123,6 +280,8 @@ useEffect(() => {
       }
     }
   };
+
+  
 
   // ✅ Add product to favorites
   const addToFavorites = async (productId) => {
@@ -227,18 +386,19 @@ useEffect(() => {
         setIsBooking(true); // ✅ Start animation
 
         const response = await axios.post(
-            "http://127.0.0.1:8000/api/bookings",
-            {
-                product_id: product.id,
-                start_date: rentalDetails.startDate,
-                end_date: rentalDetails.endDate,
-                added_price: rentalDetails.addedPrice,
-                total_price: rentalDetails.totalPrice,
-            },
-            {
-                headers: { Authorization: `Bearer ${token}` },
-            }
+          "http://127.0.0.1:8000/api/bookings",
+          {
+              product_id: product.id,
+              start_date: rentalDetails.startDate,
+              end_date: rentalDetails.endDate,
+              added_price: rentalDetails.addedPrice,
+              total_price: rentalDetails.totalPrice,
+          },
+          {
+              headers: { Authorization: `Bearer ${token}` },
+          }
         );
+        
 
         if (response.data.success) {
             const refNumber = response.data.booking.reference_number;
@@ -311,10 +471,36 @@ const isDateAvailable = (date) => {
         {/* Product Details - Two Column Layout */}
         <div className="container mx-auto px-6 mt-20"> {/* Added more top margin */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-start"> {/* Increased gap */}
-            {/* Product Image */}
-          <div className="flex justify-center mt-28"> {/* Moves image down */}
-            <img src={product.image_url} alt={product.name} className="w-full max-w-lg rounded-lg shadow-md" />
-          </div>
+         {/* ✅ Try-On Feature - Centered */}
+          {/* ✅ Try-On Feature - Centered */}
+<div className="flex flex-col items-center justify-center w-full max-w-lg bg-white shadow-lg rounded-lg p-6 text-center mt-6">
+  
+  {/* ✅ Product Image - Centered */}
+  <div className="flex justify-center mt-10"> {/* Adjusted spacing */}
+    <img src={product.image_url} alt={product.name} className="w-full max-w-lg rounded-lg shadow-md" />
+  </div>
+
+  <h3 className="text-lg font-semibold mt-6">Try-On Feature</h3>
+
+  {/* ✅ Camera & Overlay - Centered */}
+  <div className="relative w-64 h-96 mx-auto mt-4 border border-gray-300 rounded-lg overflow-hidden">
+    <video ref={videoRef} autoPlay playsInline className="absolute top-0 left-0 w-full h-full object-cover z-0" />
+    <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none" />
+  </div>
+
+  {/* ✅ Start Camera Button */}
+  {!isCameraOn && (
+    <button onClick={startCamera} className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg">
+      Start Camera
+    </button>
+  )}
+
+  <p className="text-sm text-gray-500 mt-4">
+    Stand in front of the camera to see the gown adjust to your body!
+  </p>
+</div>
+
+
             {/* Product Info & Calendar */}
             <div className="w-full flex flex-col gap-6">
               {/* Product Name, Price & Description */}
@@ -342,6 +528,7 @@ const isDateAvailable = (date) => {
                       }`}
                     />
                   </button>
+
                 </div>
 
   
@@ -419,11 +606,12 @@ const isDateAvailable = (date) => {
               >
                   {isBooking ? "Booking..." : "Book Now"}
               </button>
-
+                
               </div>
             </div>
           </div>
         </div>
+
         {/* Footer */}
         <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>

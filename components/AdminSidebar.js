@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation"; // ✅ Get current route
 import {
     Home,
     Package,
@@ -13,9 +14,23 @@ import {
     FileText,
     Warehouse,
     ClipboardCheck,
+    MessageSquare,
 } from "lucide-react";
 
 export default function AdminSidebar({ isSidebarOpen, toggleSidebar, darkMode, toggleDarkMode }) {
+    const pathname = usePathname(); // ✅ Get current route
+
+    const menuItems = [
+        { href: "/admin_pages/admin", icon: <Home size={20} />, label: "Dashboard" },
+        { href: "/admin_pages/analytics", icon: <BarChart3 size={20} />, label: "Analytics" },
+        { href: "/admin_pages/reports", icon: <FileText size={20} />, label: "Reports" },
+        { href: "/admin_pages/products", icon: <Package size={20} />, label: "Products" },
+        { href: "/admin_pages/inventory", icon: <Warehouse size={20} />, label: "Inventory" },
+        { href: "/admin_pages/orders", icon: <ClipboardCheck size={20} />, label: "Order Management" },
+        { href: "/admin_pages/users", icon: <Users size={20} />, label: "Admin Profile" },
+        { href: "/admin_pages/chat", icon: <MessageSquare size={20} />, label: "Chat with Customer" },
+    ];
+
     return (
         <aside
             className={`fixed top-0 left-0 h-full bg-[#1E293B] text-black transition-all duration-300 ${
@@ -32,62 +47,19 @@ export default function AdminSidebar({ isSidebarOpen, toggleSidebar, darkMode, t
                     </button>
                 </div>
 
-                <nav className="mt-6 flex flex-col space-y-4">
-                    <Link 
-                        href="/admin_pages/admin" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <Home size={20} />
-                        {isSidebarOpen && <span>Dashboard</span>}
-                    </Link>
-
-                    <Link 
-                        href="/admin_pages/analytics" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <BarChart3 size={20} />
-                        {isSidebarOpen && <span>Analytics</span>}
-                    </Link>
-
-                    <Link 
-                        href="/admin_pages/reports" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <FileText size={20} />
-                        {isSidebarOpen && <span>Reports</span>}
-                    </Link>
-
-                    <Link 
-                        href="/admin_pages/products" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <Package size={20} />
-                        {isSidebarOpen && <span>Products</span>}
-                    </Link>
-
-                    <Link 
-                        href="/admin_pages/inventory" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <Warehouse size={20} />
-                        {isSidebarOpen && <span>Inventory</span>}
-                    </Link>
-
-                    <Link 
-                        href="/admin_pages/orders" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <ClipboardCheck size={20} />
-                        {isSidebarOpen && <span>Order Management</span>}
-                    </Link>
-
-                    <Link 
-                        href="/admin_pages/users" 
-                        className="flex items-center space-x-3 p-2 hover:bg-pink-300 rounded-md transition-all"
-                    >
-                        <Users size={20} />
-                        {isSidebarOpen && <span>Users</span>}
-                    </Link>
+                <nav className="mt-6 flex flex-col space-y-2">
+                    {menuItems.map((item) => (
+                        <Link 
+                            key={item.href} 
+                            href={item.href} 
+                            className={`flex items-center space-x-3 p-2 rounded-md transition-all ${
+                                pathname === item.href ? "bg-pink-500 text-white" : "hover:bg-pink-300"
+                            }`}
+                        >
+                            {item.icon}
+                            {isSidebarOpen && <span>{item.label}</span>}
+                        </Link>
+                    ))}
                 </nav>
             </div>
         </aside>
