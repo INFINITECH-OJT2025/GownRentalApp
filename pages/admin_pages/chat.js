@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Pusher from "pusher-js";
 import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
-import "../../../resources/css/styles/global.css";
 
 export default function ChatPage() {
     const [messages, setMessages] = useState([]);

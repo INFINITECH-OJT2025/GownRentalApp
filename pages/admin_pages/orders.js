@@ -5,7 +5,6 @@ import axios from "axios";
 import AdminSidebar from "../../components/AdminSidebar";
 import DataTable from "react-data-table-component";
 import { Pencil, Trash2 } from "lucide-react";
-import "../../../resources/css/styles/global.css";
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState([]);

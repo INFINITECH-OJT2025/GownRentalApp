@@ -1,6 +1,5 @@
 "use client";
 
-import "../../../resources/css/styles/global.css";
 import Navbar from "../../components/Navbar";
 import AuthGuard from "../../components/AuthGuard";
 import { useEffect, useRef, useState } from "react";

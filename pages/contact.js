@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import AuthGuard from "../components/AuthGuard";
-import "../../resources/css/styles/global.css";
 import Navbar from "../components/Navbar"; // Ensure you have a Navbar component
 import Head from "next/head";
 

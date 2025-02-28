@@ -1,6 +1,5 @@
 "use client";
 
-import "../../resources/css/styles/global.css";
 import Head from "next/head";
 import AuthGuard from "../components/AuthGuard";
 import Link from "next/link";

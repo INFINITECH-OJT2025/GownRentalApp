@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import "../../../resources/css/styles/global.css";
 import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
 

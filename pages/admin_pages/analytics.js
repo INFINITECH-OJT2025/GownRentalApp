@@ -5,7 +5,6 @@ import axios from "axios";
 import AdminSidebar from "../../components/AdminSidebar";
 import { Bar } from "react-chartjs-2";
 import Image from "next/image";
-import "../../../resources/css/styles/global.css";
 import {
     Chart as ChartJS,
     CategoryScale,

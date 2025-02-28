@@ -1,6 +1,5 @@
 "use client";
 
-import "../../resources/css/styles/global.css";
 import Head from "next/head";
 import AuthGuard from "../components/AuthGuard";
 import Navbar from "../components/Navbar"; // ✅ Navbar Component
@@ -8,6 +7,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import DataTable from "react-data-table-component"; // ✅ Import DataTable
 import { useRouter } from "next/navigation";
+import AdminPaymentDetails from "../components/AdminPaymentDetails";
 
 export default function BookHistoryPage() {
     const [bookings, setBookings] = useState([]);
@@ -315,19 +315,7 @@ const handleUpload = async () => {
                                 <p><strong>Description:</strong> {selectedProduct.description || "No description available."}</p>
                             </div>
                             
-                        <h2 className="text-2xl font-semibold text-gray-800">GCash Payment Details</h2>
-            
-            {/* GCash QR Code */}
-            <div className="flex flex-col items-center mt-4">
-                <div className="w-48 h-48 flex items-center justify-center bg-white rounded-lg shadow-md p-2 border border-gray-300">
-                    <img src="/images/gcash_qr.jpg" alt="GCash QR Code" className="w-full h-full object-contain rounded-md" />
-                </div>
-                <div className="mt-4 text-lg text-gray-800 text-center">
-                    <p><strong>GCash Number:</strong> <span className="text-pink-600">0912-345-6789</span></p>
-                    <p><strong>Email:</strong> <span className="text-pink-600">admin@gownrental.com</span></p>
-                    <p><strong>Contact:</strong> <span className="text-pink-600">+63 917 123 4567</span></p>
-                </div>
-            </div>
+                        <AdminPaymentDetails />
                         </div>
 
                     </div>

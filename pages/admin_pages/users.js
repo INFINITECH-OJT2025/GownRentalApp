@@ -4,7 +4,6 @@ import { useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
-import "../../../resources/css/styles/global.css";
 
 export default function AdminProfilePage() {
     // ✅ State for profile fields

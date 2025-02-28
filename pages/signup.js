@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation"; // Next.js 13+ navigation
 import Image from "next/image";
 import axios from "axios";
-import "../../resources/css/styles/global.css";
 
 export default function SignupPage() {
     const router = useRouter();

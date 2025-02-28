@@ -3,7 +3,6 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
-import "../../../resources/css/styles/global.css";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import "datatables.net-dt/css/dataTables.dataTables.css";

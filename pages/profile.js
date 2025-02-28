@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation"; // ✅ Use search 
 import Head from "next/head";
 import Image from "next/image";
 import AuthGuard from "../components/AuthGuard";
-import "../../resources/css/styles/global.css";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/sidebar"; // ✅ Correct import
 import axios from "axios";

@@ -1,0 +1,58 @@
+/* global.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add this to your global styles to reset any default margin/padding */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    margin: 0;  /* Remove default margin */
+    padding: 0; /* Remove default padding */
+  }
+
+  .bg-green-300 {
+    background-color: #86efac !important; /* Light green */
+}
+
+.text-white {
+    color: white !important;
+}
+
+.font-semibold {
+    font-weight: 600 !important;
+}
+
+.rounded-lg {
+    border-radius: 8px !important;
+}
+
+/* ✅ Make available dates green */
+.available-date {
+  background-color: #28a745 !important; /* Green */
+  color: white !important;
+  font-weight: bold !important;
+  border-radius: 8px !important;
+  transition: background-color 0.2s ease-in-out; /* Smooth transition */
+}
+
+/* ✅ Ensure Green Hover Effect */
+.available-date:hover {
+  background-color: #b62472 !important; /* Darker green on hover */
+  cursor: pointer; /* Indicate it's selectable */
+}
+
+/* ✅ Keep the selected date green */
+.react-calendar__tile--active,
+.react-calendar__tile--active:enabled:hover,
+.react-calendar__tile--active:enabled:focus {
+  background-color: #b62472 !important; /* Dark Green for Selected */
+  color: white !important;
+  font-weight: bold !important;
+  border-radius: 8px !important;
+}
+

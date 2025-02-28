@@ -7,7 +7,6 @@ import Link from "next/link";
 import AuthGuard from "../components/AuthGuard";
 import { FaTrash } from "react-icons/fa";
 import DataTable from "react-data-table-component";
-import "../../resources/css/styles/global.css";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
 

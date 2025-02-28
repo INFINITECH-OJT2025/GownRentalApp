@@ -5,7 +5,6 @@ import Image from "next/image";
 import Calendar from "react-calendar";
 import AuthGuard from "../components/AuthGuard";
 import "react-calendar/dist/Calendar.css";
-import "../../resources/css/styles/global.css";
 import Link from "next/link";
 import { FaHeart, FaStar } from "react-icons/fa";
 import axios from "axios";
