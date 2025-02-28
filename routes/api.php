@@ -11,6 +11,8 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ChatController;
 
+Route::get('/admin/qrcode', [UserController::class, 'getAdminQRCode']);
+
 Route::middleware('auth:api')->group(function () {
     Route::get('/chats/{receiverId}', [ChatController::class, 'index']); // Get chat messages
     Route::post('/chats', [ChatController::class, 'store']); // Send message
