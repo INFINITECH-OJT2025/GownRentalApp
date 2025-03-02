@@ -10,6 +10,8 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ChatController;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/admin/qrcode', [UserController::class, 'getAdminQRCode']);
 
@@ -21,12 +23,14 @@ Route::middleware('auth:api')->group(function () {
 
 Route::middleware('auth:api')->group(function () {
     // ✅ Booking Routes
+    Route::post('/bookings/apply-discount', [BookingController::class, 'applyDiscount'])->middleware('auth:api');
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::get('/bookings/{referenceNumber}', [BookingController::class, 'show']);
     Route::post('/bookings/upload-receipt', [BookingController::class, 'uploadReceipt']);
     Route::get('/user/bookings', [BookingController::class, 'userBookings']);
     Route::patch('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
     Route::get('/bookings', [BookingController::class, 'index']);
+    
 });
 
 Route::middleware('auth:api')->group(function () {
@@ -38,9 +42,38 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/inventory/{id}', [DashboardController::class, 'updateInventory']); // Update item
     Route::delete('/inventory/{id}', [DashboardController::class, 'deleteInventory']); // Delete item
     Route::get('/orders', [DashboardController::class, 'index']); // Fetch all orders
-    Route::put('/orders/{id}/update-status', [DashboardController::class, 'updateStatus']); // Update order status
-    
+    Route::put('/orders/{id}/update-status', [DashboardController::class, 'updateStatus']); // Ensure status updates
+    Route::post('/products/{id}/update', [DashboardController::class, 'updateProduct']);
+    Route::post('/products', [DashboardController::class, 'storeProduct']);
+    Route::put('/inventory/{id}/add-stock', [DashboardController::class, 'addStock']); 
+    Route::get('/stock-logs', [DashboardController::class, 'getStockLogs']);
+    Route::post('/products/{id}/toggle-visibility', [DashboardController::class, 'toggleProductVisibility']);
+});
 
+Route::post('/process-image', function (Request $request) {
+    try {
+        $imageBase64 = $request->input('image');
+
+        if (!$imageBase64) {
+            return response()->json(['success' => false, 'message' => 'No image provided'], 400);
+        }
+
+        // Decode base64 image
+        $imageData = base64_decode($imageBase64);
+        $fileName = 'products/' . uniqid() . '.png';
+
+        // ✅ Fix: Store image without `/storage/`
+        Storage::disk('public')->put($fileName, $imageData);
+
+        // ✅ Fix: Return correct path without `/storage/`
+        return response()->json([
+            'success' => true,
+            'processed_image' => $fileName // No `/storage/` prefix
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'message' => 'Server error: ' . $e->getMessage()], 500);
+    }
 });
 
 Route::middleware('auth:api')->get('/bookings/count', function (Request $request) {

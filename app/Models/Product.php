@@ -12,22 +12,9 @@ class Product extends Model
     protected $table = 'products';
 
     protected $fillable = [
-        'name',
-        'image',
-        'price',
-        'description',
-        'availability',
-        'category',
-        'start_date',  
-        'end_date'   
+        'name', 'price', 'category', 'stock', 'description',
+        'start_date', 'end_date', 'image', 'is_hidden' 
     ];
-
-    // Ensure the image URL is correct
-    public function getImageUrlAttribute()
-    {
-        return asset('storage/' . $this->image);
-    }
-
-    protected $appends = ['image_url']; // Append the computed image_url attribute
+    
 }
-
+    

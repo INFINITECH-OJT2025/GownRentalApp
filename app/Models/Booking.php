@@ -18,8 +18,10 @@ class Booking extends Model
         'total_price',
         'gcash_receipt',
         'status',
-        'reference_number'
+        'reference_number',
+        'voucher_fee', 
     ];
+    
 
     // Relationship: A booking belongs to a user
     public function user()
