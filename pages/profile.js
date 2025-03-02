@@ -24,24 +24,56 @@ export default function ProfilePage() {
     const [bio, setBio] = useState("");
     const [image, setImage] = useState(null);
     const [imagePreview, setImagePreview] = useState("/default-profile.png");
+    const [totalBookings, setTotalBookings] = useState(0);
+    const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+
 
     useEffect(() => {
         const fetchUser = async () => {
             const token = localStorage.getItem("token");
             if (!token) return;
-
+    
             try {
                 const response = await axios.get("http://127.0.0.1:8000/api/user", {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+    
+                const user = response.data.user;
+                setTotalBookings(user.total_bookings || 0);
+                setLoyaltyPoints(user.loyalty_points || 0);
+    
+            } catch (err) {
+                console.error("Error fetching user:", err);
+            }
+        };
+    
+        fetchUser();
+    }, []);
 
+    useEffect(() => {
+        const fetchUser = async () => {
+            const token = localStorage.getItem("token");
+            if (!token) return;
+    
+            try {
+                const response = await axios.get("http://127.0.0.1:8000/api/user", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+    
                 const user = response.data.user;
                 setFirstName(user.name.split(" ")[0]);
                 setLastName(user.name.split(" ")[1] || "");
                 setEmail(user.email);
-                setAddress(user.address || ""); // ✅ Load Address
-                setBio(user.bio || ""); // ✅ Load Bio
-                setImagePreview(user.image ? user.image : "/default-profile.png");
+                setAddress(user.address || ""); 
+                setBio(user.bio || ""); 
+    
+                // ✅ Ensure the image URL is correct
+                if (user.image) {
+                    setImagePreview(user.image.startsWith("http") ? user.image : `http://127.0.0.1:8000/storage/profile_pictures/${user.image}`);
+                } else {
+                    setImagePreview("/default-profile.png");
+                }
+    
                 setLoading(false);
             } catch (err) {
                 console.error("Error fetching user:", err);
@@ -49,9 +81,10 @@ export default function ProfilePage() {
                 setLoading(false);
             }
         };
-
+    
         fetchUser();
     }, []);
+    
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -66,7 +99,6 @@ export default function ProfilePage() {
         const token = localStorage.getItem("token");
         if (!token) return;
     
-        // ✅ Check for required fields before sending the request
         if (!firstName || !lastName || !email) {
             alert("⚠ Please fill in all required fields (First Name, Last Name, and Email).");
             return;
@@ -76,14 +108,13 @@ export default function ProfilePage() {
             const formData = new FormData();
             formData.append("name", `${firstName} ${lastName}`);
             formData.append("email", email);
-            formData.append("address", address || ""); // ✅ Ensure address is always sent
-            formData.append("bio", bio || ""); // ✅ Ensure bio is always sent
+            formData.append("address", address || "");
+            formData.append("bio", bio || "");
     
             if (image) {
-                formData.append("image", image); // ✅ Add only if an image is selected
+                formData.append("image", image);
             }
     
-            // ✅ Make API request
             const response = await axios.post("http://127.0.0.1:8000/api/user/update", formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -97,12 +128,11 @@ export default function ProfilePage() {
         } catch (err) {
             console.error("Error updating profile:", err);
     
-            // ✅ Handle validation errors from Laravel
             if (err.response && err.response.status === 422) {
                 const errorMessages = err.response.data.errors;
                 let errorText = "❌ Profile update failed:\n";
                 for (const key in errorMessages) {
-                    errorText += `• ${errorMessages[key][0]}\n`; // Show each error
+                    errorText += `• ${errorMessages[key][0]}\n`;
                 }
                 alert(errorText);
             } else {
@@ -110,6 +140,7 @@ export default function ProfilePage() {
             }
         }
     };
+    
     
 
     if (loading) return <p className="text-center mt-10">Loading profile...</p>;
@@ -130,7 +161,27 @@ export default function ProfilePage() {
                     {/* Main Content */}
                     <main className="w-full md:w-3/4 lg:w-4/5 bg-white p-6 md:p-20 rounded-lg shadow-md">
                         <h2 className="text-2xl font-bold text-gray-900">
-                            {section === "public" ? "Public Profile" : "Loyalty & Rewards"}
+                        {section === "loyalty" && (
+                                <div className="p-6 bg-white shadow-lg rounded-lg">
+                                    <h3 className="text-2xl font-bold text-pink-900">Loyalty & Rewards</h3>
+                                    <p className="text-gray-700 mt-2">Earn points for every 25 approved bookings!</p>
+
+                                    <div className="mt-4 p-4 border rounded-lg bg-pink-100">
+                                        <h4 className="text-xl font-semibold text-pink-900">Total Approved Bookings</h4>
+                                        <p className="text-3xl font-bold text-pink-600">{totalBookings} Bookings</p>
+                                    </div>
+
+                                    <div className="mt-4 p-4 border rounded-lg bg-green-100">
+                                        <h4 className="text-xl font-semibold text-green-900">Your Loyalty Points</h4>
+                                        <p className="text-3xl font-bold text-green-600">{loyaltyPoints} Points</p>
+                                    </div>
+
+                                    <p className="mt-4 text-gray-600">
+                                        Every **25 approved bookings** earn you **100 loyalty points**! Keep booking to unlock more rewards!
+                                    </p>
+                                </div>
+                            )
+                            }
                         </h2>
 
                         {/* ✅ Show Public Profile Section */}
@@ -140,13 +191,16 @@ export default function ProfilePage() {
 
                                 {/* ✅ Profile Picture Section */}
                                 <div className="flex flex-col sm:flex-row items-center mt-8 space-y-4 sm:space-y-0 sm:space-x-6">
-                                    <Image
-                                        className="w-32 h-32 rounded-full ring-2 ring-pink-300 object-cover"
-                                        src={imagePreview}
-                                        alt="User avatar"
-                                        width={128}
-                                        height={128}
-                                    />
+                                <Image
+                                    className="w-32 h-32 rounded-full ring-2 ring-pink-300 object-cover"
+                                    src={imagePreview}
+                                    alt="User avatar"
+                                    width={128}
+                                    height={128}
+                                    loading="lazy"
+                                    decoding="async"
+                                />
+
                                     <div className="flex flex-col space-y-3">
                                         <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="fileInput" />
                                         <label

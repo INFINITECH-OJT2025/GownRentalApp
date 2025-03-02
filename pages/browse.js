@@ -89,6 +89,23 @@ export default function BrowsePage() {
     
         fetchFavorites();
     }, []);
+
+    useEffect(() => {
+        axios.get("http://127.0.0.1:8000/api/categories")
+            .then((response) => {
+                if (response.data.success && Array.isArray(response.data.categories)) {
+                    setCategories(response.data.categories);
+                } else {
+                    setCategories([]);
+                }
+            })
+            .catch((error) => {
+                console.error("Error fetching categories:", error);
+                setCategories([]);
+            });
+    }, []);
+    
+
     
     useEffect(() => {
         axios.get("http://127.0.0.1:8000/api/products")

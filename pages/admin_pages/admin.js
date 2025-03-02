@@ -118,8 +118,8 @@ export default function AdminDashboard() {
                             <p>{stats.products}</p>
                         </div>
                         <div className="bg-white p-6 rounded-lg shadow-md flex flex-col items-center text-center">
-                            <h2 className="text-xl font-bold">Total Products</h2>
-                            <p>₱{stats.totalRevenue}</p>
+                            <h2 className="text-xl font-bold">Total Revenue</h2>
+                            <p>₱{Number(stats.totalRevenue || 0).toLocaleString("en-PH")}</p>
                         </div>
                     </div>
                 </main>

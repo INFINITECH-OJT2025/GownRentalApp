@@ -94,7 +94,8 @@ export default function HomePage() {
         axios.get("http://127.0.0.1:8000/api/products")
             .then((response) => {
                 if (response.data && Array.isArray(response.data.data)) {
-                    setProducts(response.data.data);
+                    // ✅ Filter products where `is_hidden = 0`
+                    setProducts(response.data.data.filter(product => product.is_hidden === 0));
                 } else {
                     setProducts([]);
                 }
@@ -104,6 +105,7 @@ export default function HomePage() {
                 setProducts([]);
             });
     }, []);
+    
 
     useEffect(() => {
         const fetchWishlist = async () => {
@@ -142,6 +144,22 @@ export default function HomePage() {
                 : [...prev, category] // Add if not selected
         );
     };
+
+    useEffect(() => {
+        axios.get("http://127.0.0.1:8000/api/categories")
+            .then((response) => {
+                if (response.data.success && Array.isArray(response.data.categories)) {
+                    setCategories(response.data.categories);
+                } else {
+                    setCategories([]);
+                }
+            })
+            .catch((error) => {
+                console.error("Error fetching categories:", error);
+                setCategories([]);
+            });
+    }, []);
+    
 
     const handleDateChange = (productId, productPrice, type, value) => {
         setRentalDetails((prev) => {

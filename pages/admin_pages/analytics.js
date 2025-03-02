@@ -119,7 +119,7 @@ export default function AnalyticsPage() {
                             { title: "Total Users", value: stats.users },
                             { title: "Total Products", value: stats.products },
                             { title: "Total Bookings", value: stats.bookings },
-                            { title: "Total Revenue", value: `₱${stats.totalRevenue}` },
+                            { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}` },
                             { title: "Pending Bookings", value: stats.pendingBookings },
                             { title: "Completed Bookings", value: stats.completedBookings },
                         ].map((item, index) => (

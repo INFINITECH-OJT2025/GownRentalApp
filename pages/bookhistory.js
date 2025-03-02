@@ -73,39 +73,46 @@ const handleUpload = async () => {
     }
 };
 
+useEffect(() => {
+    const fetchBookings = async () => {
+        const token = localStorage.getItem("token");
+        if (!token) return;
 
+        try {
+            const response = await axios.get("http://127.0.0.1:8000/api/user/bookings", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
 
-    useEffect(() => {
-        const fetchBookings = async () => {
-            const token = localStorage.getItem("token");
-            if (!token) return;
-
-            try {
-                const response = await axios.get("http://127.0.0.1:8000/api/user/bookings", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (response.data.success) {
-                    setBookings(response.data.bookings);
-                    setFilteredBookings(response.data.bookings);
-                }
-            } catch (error) {
-                console.error("API Error:", error.message);
+            if (response.data.success) {
+                setBookings(response.data.bookings);
+                setFilteredBookings(response.data.bookings);
             }
-        };
-
-        fetchBookings();
-    }, []);
-
-    // ✅ Open Product Details Modal
-    const handleShowProduct = (product) => {
-        if (!product) {
-            alert("⚠ Product details not available.");
-            return;
+        } catch (error) {
+            console.error("API Error:", error.message);
         }
-        setSelectedProduct(product);
-        setShowProductModal(true);
     };
+
+    fetchBookings();
+}, []);
+
+
+const handleShowProduct = (product, voucherFee) => {
+    if (!product) {
+        alert("⚠ Product details not available.");
+        return;
+    }
+
+    setSelectedProduct({
+        ...product,
+        voucherFee: voucherFee || 0, // ✅ Include voucher fee
+        startDate: product.start_date || null,
+        endDate: product.end_date || null,
+    });
+
+    setShowProductModal(true);
+};
+
+
 
     // ✅ Close Product Modal
     const closeProductModal = () => {
@@ -159,6 +166,32 @@ const handleUpload = async () => {
             sortable: true,
         },
         {
+            name: "Start Date",
+            selector: (row) => row.start_date,
+            sortable: true,
+        },
+        {
+            name: "End Date",
+            selector: (row) => row.end_date,
+            sortable: true,
+        },
+        {
+            name: "Basic Price",
+            selector: (row) => `₱${Number(row.product?.price).toLocaleString()}`,
+            sortable: true,
+            sortable: true,
+        },
+        {
+            name: "Added Price",
+            selector: (row) => `₱${Number(row.added_price).toLocaleString()}`,
+            sortable: true,
+        },
+        {
+            name: "Voucher Fee", 
+            selector: (row) => `₱${Number(row.voucher_fee || 0).toLocaleString()}`, 
+            sortable: true,
+        },
+        {
             name: "Total Price",
             selector: (row) => `₱${Number(row.total_price).toLocaleString()}`,
             sortable: true,
@@ -180,7 +213,13 @@ const handleUpload = async () => {
                     {row.status}
                 </span>
             ),
-        },        
+        },
+        {
+            name: "Created Date",
+            selector: (row) => new Date(row.created_at).toLocaleString(),
+            sortable: true,
+        },
+
         {
             name: "Actions",
             cell: (row) => (
@@ -198,7 +237,7 @@ const handleUpload = async () => {
                             ⚠ No Product
                         </button>
                     )}
-        
+    
                     {/* 📄 View Receipt */}
                     {row.gcash_receipt ? (
                         <button
@@ -231,7 +270,7 @@ const handleUpload = async () => {
                             >
                                 📤 Upload
                             </label>
-        
+    
                             {/* Upload Button */}
                             {selectedBookingId === row.id && selectedFile && (
                                 <button
@@ -245,12 +284,12 @@ const handleUpload = async () => {
                         </>
                     )}
                 </div>
-            ), // ✅ Correctly closed `cell` function
+            ),
             ignoreRowClick: true,
             allowOverflow: true,
         },
     ];
-
+    
     return (
         <AuthGuard>
             <Head>
@@ -303,23 +342,25 @@ const handleUpload = async () => {
                 </section>
 
                 {/* 🏷 Product Details Modal */}
-                {showProductModal && selectedProduct && (
-                    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-                        <div className="relative bg-white p-6 rounded-lg shadow-lg max-w-lg w-full text-center">
-                            <button className="absolute top-2 right-2 text-gray-700 text-xl font-bold hover:text-red-600 transition" onClick={closeProductModal}>
-                                ✖
-                            </button>
-                            <h2 className="text-2xl font-semibold text-gray-800">Product Details</h2>
-                            <div className="mt-4 text-lg">
-                                <p><strong>Name:</strong> {selectedProduct.name}</p>
-                                <p><strong>Description:</strong> {selectedProduct.description || "No description available."}</p>
+                    {showProductModal && selectedProduct && (
+                        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                            <div className="relative bg-white p-6 rounded-lg shadow-lg max-w-lg w-full text-center">
+                                <button
+                                    className="absolute top-2 right-2 text-gray-700 text-xl font-bold hover:text-red-600 transition"
+                                    onClick={closeProductModal}
+                                >
+                                    ✖
+                                </button>
+                                <h2 className="text-2xl font-semibold text-gray-800">Product Details</h2>
+                                <div className="mt-4 text-lg">
+                                    <p><strong>Name:</strong> {selectedProduct.name}</p>
+                                    <p><strong>Description:</strong> {selectedProduct.description || "No description available."}</p>
+                                </div>
+                                  <AdminPaymentDetails />
                             </div>
-                            
-                        <AdminPaymentDetails />
                         </div>
+                    )}
 
-                    </div>
-                )}
 
                 {/* 🖼 Receipt Modal */}
                 {showReceiptModal && (

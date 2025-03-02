@@ -29,6 +29,7 @@ export default function ProductDetailPage() {
   const [isBooking, setIsBooking] = useState(false);
   const [detector, setDetector] = useState(null);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [receiptImage, setReceiptImage] = useState(null);
 
   useEffect(() => {
     const setupCamera = async () => {
@@ -343,12 +344,29 @@ useEffect(() => {
   };
 
   const handleDateChange = (type, value) => {
-    setRentalDetails((prev) => ({
-      ...prev,
-      [type]: value,
-    }));
+    setRentalDetails((prev) => {
+      if (type === "startDate") {
+        // ✅ Reset endDate if it's before new startDate
+        return {
+          ...prev,
+          startDate: value,
+          endDate: prev.endDate && new Date(prev.endDate) < new Date(value) ? null : prev.endDate,
+        };
+      }
+      
+      if (type === "endDate") {
+        // ✅ Ensure endDate is after startDate
+        if (!prev.startDate || new Date(value) < new Date(prev.startDate)) {
+          alert("⚠ End Date must be after Start Date!");
+          return prev;
+        }
+        return { ...prev, endDate: value };
+      }
+  
+      return prev;
+    });
   };
-
+  
   
   useEffect(() => {
     if (rentalDetails.startDate && rentalDetails.endDate) {
@@ -378,18 +396,22 @@ useEffect(() => {
         return;
     }
 
-    const confirmBooking = window.confirm("✅ Booking Saved! Proceed to booking confirmation?");
+    const confirmBooking = window.confirm("✅ Booking saved! Waiting for approval.");
     if (!confirmBooking) return;
 
     try {
-        setIsBooking(true); // ✅ Start animation
+        setIsBooking(true);
+
+        // ✅ Convert date to `YYYY-MM-DD` before sending
+        const formattedStartDate = new Date(rentalDetails.startDate).toISOString().split("T")[0];
+        const formattedEndDate = new Date(rentalDetails.endDate).toISOString().split("T")[0];
 
         const response = await axios.post(
           "http://127.0.0.1:8000/api/bookings",
           {
               product_id: product.id,
-              start_date: rentalDetails.startDate,
-              end_date: rentalDetails.endDate,
+              start_date: formattedStartDate, // ✅ Fixed format
+              end_date: formattedEndDate, // ✅ Fixed format
               added_price: rentalDetails.addedPrice,
               total_price: rentalDetails.totalPrice,
           },
@@ -397,16 +419,12 @@ useEffect(() => {
               headers: { Authorization: `Bearer ${token}` },
           }
         );
-        
 
         if (response.data.success) {
             const refNumber = response.data.booking.reference_number;
 
-            // ✅ Update booking count in global state & localStorage
-            updateBookingCount(bookingCount + 1);
-
             setTimeout(() => {
-                setIsBooking(false); // ✅ Stop animation
+                setIsBooking(false);
                 router.push(`/book?ref=${refNumber}`);
             }, 1500);
         } else {
@@ -419,6 +437,7 @@ useEffect(() => {
         setIsBooking(false);
     }
 };
+
 
   
   useEffect(() => {
@@ -440,7 +459,7 @@ useEffect(() => {
     }
 }, [id]);
 
-const isDateAvailable = (date) => {
+const isDateAvailable = (date, isStartDate = true) => {
   if (!product?.start_date || !product?.end_date) return false;
 
   const start = new Date(product.start_date);
@@ -450,7 +469,15 @@ const isDateAvailable = (date) => {
   const startOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const endOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
-  return dateOnly >= startOnly && dateOnly <= endOnly; // ✅ Ensure correct date comparison
+  if (isStartDate) {
+    return dateOnly >= startOnly && dateOnly <= endOnly; // ✅ Ensure valid start dates
+  }
+
+  return (
+    rentalDetails.startDate &&
+    dateOnly >= new Date(rentalDetails.startDate).setHours(0, 0, 0, 0) && 
+    dateOnly <= endOnly
+  ); // ✅ Ensure end date is after start date
 };
 
 
@@ -549,19 +576,22 @@ const isDateAvailable = (date) => {
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700">Start Date (Pick-Up)</label>
                   <div className="flex justify-center">
-                  <Calendar
-                    value={rentalDetails.startDate ? new Date(rentalDetails.startDate) : null}
-                    onChange={(date) => handleDateChange("startDate", date)}
-                    className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 mt-2"
-                    tileDisabled={({ date }) => !isDateAvailable(date)}
-                    tileClassName={({ date }) =>
-                      isDateAvailable(date)
-                        ? rentalDetails.startDate && new Date(rentalDetails.startDate).toDateString() === date.toDateString()
-                          ? "react-calendar__tile--active" // ✅ Selected date styling
-                          : "available-date" // ✅ Available date styling
-                        : ""
-                    }
-                  />
+                {/* ✅ Start Date Calendar */}
+                <Calendar
+                  value={rentalDetails.startDate ? new Date(rentalDetails.startDate) : null}
+                  onChange={(date) => handleDateChange("startDate", date)}
+                  className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 mt-2"
+                  tileDisabled={({ date }) => !isDateAvailable(date, true)}
+                  tileClassName={({ date }) =>
+                    isDateAvailable(date, true)
+                      ? rentalDetails.startDate &&
+                        new Date(rentalDetails.startDate).toDateString() === date.toDateString()
+                        ? "react-calendar__tile--active" // ✅ Highlight selected start date
+                        : "available-date" // ✅ Show green available dates
+                      : "react-calendar__tile--disabled" // ✅ Show disabled dates
+                  }
+                />
+
                   </div>
                 </div>
   
@@ -569,19 +599,21 @@ const isDateAvailable = (date) => {
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700">End Date (Return Due)</label>
                   <div className="flex justify-center">
-                  <Calendar
+              {/* ✅ End Date Calendar */}
+                    <Calendar
                       value={rentalDetails.endDate ? new Date(rentalDetails.endDate) : null}
                       onChange={(date) => handleDateChange("endDate", date)}
                       className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 mt-2"
-                      tileDisabled={({ date }) => !isDateAvailable(date)}
+                      tileDisabled={({ date }) => !isDateAvailable(date, false)}
                       tileClassName={({ date }) =>
-                        isDateAvailable(date)
-                          ? rentalDetails.endDate && new Date(rentalDetails.endDate).toDateString() === date.toDateString()
-                            ? "react-calendar__tile--active" // ✅ Selected date styling
-                            : "available-date" // ✅ Available date styling
-                          : ""
+                        isDateAvailable(date, false)
+                          ? rentalDetails.endDate &&
+                            new Date(rentalDetails.endDate).toDateString() === date.toDateString()
+                            ? "react-calendar__tile--active" // ✅ Highlight selected end date
+                            : "available-date" // ✅ Show green available dates
+                          : "react-calendar__tile--disabled" // ✅ Show disabled dates
                       }
-                    />
+/>
                   </div>
                 </div>
   

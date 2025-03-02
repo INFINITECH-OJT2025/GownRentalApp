@@ -44,20 +44,22 @@ export default function OrdersPage() {
             console.error("Unauthorized: No token found.");
             return;
         }
-
+    
         try {
             const response = await axios.put(
                 `http://127.0.0.1:8000/api/orders/${id}/update-status`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-
-            console.log(`Order ${id} status updated to:`, newStatus);
-            fetchOrders(); // Refresh the list after update
+    
+            alert(`Order ${id} status updated to: ${newStatus}`);
+            fetchOrders(); // ✅ Refresh orders list
         } catch (error) {
             console.error("Error updating status:", error);
+            alert("Failed to update booking status.");
         }
     };
+    
 
     const columns = [
         { name: "Reference No.", selector: (row) => row.reference_number, sortable: true },
