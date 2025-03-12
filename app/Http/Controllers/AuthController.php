@@ -15,28 +15,52 @@ class AuthController extends Controller
      */
     public function register(Request $request)
     {
+        \Log::info('📩 Registration Attempt:', $request->all());
+    
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6|confirmed',
         ]);
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
-
-        $token = $user->createToken('GownRentalApp')->accessToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'User registered successfully!',
-            'token' => $token,
-            'user' => $user,
-        ], 201);
+    
+        try {
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+            ]);
+    
+            // ✅ Debugging: Check if user exists
+            if (!$user) {
+                \Log::error('❌ User creation failed.');
+                return response()->json(['error' => 'User creation failed'], 500);
+            }
+    
+            \Log::info('✅ User Created:', $user->toArray());
+    
+            // ✅ Ensure user is retrieved before calling createToken()
+            $freshUser = User::find($user->id);
+    
+            if (!$freshUser) {
+                \Log::error('❌ User not found after creation.');
+                return response()->json(['error' => 'User not found after registration'], 500);
+            }
+    
+            $token = $freshUser->createToken('GownRentalApp')->accessToken;
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'User registered successfully!',
+                'token' => $token,
+                'user' => $freshUser,
+            ], 201);
+    
+        } catch (\Exception $e) {
+            \Log::error('❌ Registration Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Internal Server Error', 'details' => $e->getMessage()], 500);
+        }
     }
-
+        
     /**
      * ✅ Login and return access token.
      */

@@ -11,78 +11,78 @@ use Illuminate\Support\Facades\Auth;
 use App\Mail\BookingConfirmationMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use App\Mail\BookingCanceledMail;
 
 class BookingController extends Controller
 {
-    // ✅ Get single booking details
     public function show($referenceNumber)
-    {
-        $booking = Booking::with('product')->where('reference_number', $referenceNumber)->first();
+{
+    $booking = Booking::with('product')->where('reference_number', $referenceNumber)->first();
     
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
-        }
-    
-        return response()->json([
-            'success' => true,
-            'booking' => [
-                'id' => $booking->id,
-                'reference_number' => $booking->reference_number,
-                'product' => $booking->product,
-                'start_date' => $booking->start_date,
-                'end_date' => $booking->end_date,
-                'added_price' => $booking->added_price,
-                'total_price' => $booking->total_price,
-                'voucher_fee' => $booking->voucher_fee, // ✅ Include voucher_fee
-                'gcash_receipt' => $booking->gcash_receipt,
-                'status' => $booking->status,
-                'created_at' => $booking->created_at,
-                'updated_at' => $booking->updated_at
-            ]
-        ]);
+    if (!$booking) {
+        return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
     }
-    
-    
 
-    public function applyDiscount(Request $request)
-    {
-        $validated = $request->validate([
-            'booking_id' => 'required|exists:bookings,id',
-            'points_to_use' => 'required|integer|min:1',
-        ]);
-    
-        $booking = Booking::findOrFail($validated['booking_id']);
-        $user = Auth::user();
-    
-        // ✅ Ensure user has enough points
-        if ($validated['points_to_use'] > $user->loyalty_points) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Not enough loyalty points!'
-            ], 400);
-        }
-    
-        // ✅ Deduct points from user
-        $user->loyalty_points -= $validated['points_to_use'];
-        $user->save();
-    
-        // ✅ Apply discount to total price
-        $newTotalPrice = max(0, $booking->total_price - $validated['points_to_use']); // Ensure no negative price
-        $booking->total_price = $newTotalPrice;
-    
-        // ✅ Save used points as `voucher_fee`
-        $booking->voucher_fee = $validated['points_to_use']; 
-        $booking->save();
-    
+   return response()->json([
+    'success' => true,
+    'booking' => [
+        'id' => $booking->id,
+        'reference_number' => $booking->reference_number,
+        'product' => [
+            'id' => $booking->product->id,
+            'name' => $booking->product->name,
+        ],
+        'discounted_price' => (float) ($booking->discounted_price ?? $booking->total_price), // ✅ Ensure it's a float
+        'total_price' => (float) $booking->total_price, // ✅ Convert to float
+        'added_price' => (float) $booking->added_price,
+        'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
+        'gcash_receipt' => $booking->gcash_receipt,
+        'status' => $booking->status,
+        'created_at' => $booking->created_at,
+        'updated_at' => $booking->updated_at
+    ]
+]);    
+
+}
+
+public function applyDiscount(Request $request)
+{
+    $validated = $request->validate([
+        'booking_id' => 'required|exists:bookings,id',
+        'points_to_use' => 'required|integer|min:1',
+    ]);
+
+    $booking = Booking::findOrFail($validated['booking_id']);
+    $user = Auth::user();
+
+    // ✅ Ensure user has enough points
+    if ($validated['points_to_use'] > $user->loyalty_points) {
         return response()->json([
-            'success' => true,
-            'message' => 'Discount applied successfully!',
-            'new_total_price' => $booking->total_price,
-            'remaining_points' => $user->loyalty_points,
-        ]);
+            'success' => false,
+            'message' => 'Not enough loyalty points!'
+        ], 400);
     }
-    
 
+    // ✅ Deduct points from user correctly
+    $user->loyalty_points -= $validated['points_to_use'];
+    $user->save();
+
+    // ✅ Deduct points from final price
+    $originalTotal = ($booking->discounted_price ?? $booking->total_price) + $booking->added_price;
+    $newTotalPrice = max(0, $originalTotal - $validated['points_to_use']); // Ensure no negative values
+
+    // ✅ Save used points as `voucher_fee`
+    $booking->voucher_fee = $validated['points_to_use']; 
+    $booking->total_price = $newTotalPrice;
+    $booking->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Discount applied successfully!',
+        'new_total_price' => $booking->total_price,
+        'remaining_points' => $user->loyalty_points, // ✅ Return updated points
+    ]);
+}
 
     // ✅ Get authenticated user's bookings
     public function userBookings(Request $request)
@@ -101,71 +101,104 @@ class BookingController extends Controller
     }
 
     public function cancelBooking($referenceNumber)
-    {
-        $booking = Booking::where('reference_number', $referenceNumber)->first();
-    
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
-        }
-    
-        if ($booking->status === 'canceled') {
-            return response()->json(['success' => false, 'message' => 'Booking already canceled'], 400);
-        }
-    
-        // ✅ Restore stock
-        $product = Product::find($booking->product_id);
-        $product->increment('stock', 1);
-    
-        // ✅ Remove booked dates from availability
-        $startDate = new \DateTime($booking->start_date);
-        $endDate = new \DateTime($booking->end_date);
-        while ($startDate <= $endDate) {
-            $dateStr = $startDate->format('Y-m-d');
-            $startDate->modify('+1 day');
-        }
-        $product->save();
-    
-        // ✅ Update booking status
-        $booking->status = 'canceled';
-        $booking->save();
-    
-        return response()->json(['success' => true, 'message' => 'Booking canceled successfully']);
+{
+    $booking = Booking::where('reference_number', $referenceNumber)->first();
+
+    if (!$booking) {
+        return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
     }
 
-    
-    
+    if ($booking->status === 'canceled') {
+        return response()->json(['success' => false, 'message' => 'Booking already canceled'], 400);
+    }
 
-    // ✅ Upload receipt for a booking
-    public function uploadReceipt(Request $request)
-    {
-        // ✅ Validate incoming request
-        $validator = Validator::make($request->all(), [
-            'booking_id' => 'required|exists:bookings,id',
-            'receipt' => 'required|image|mimes:jpg,png,jpeg|max:2048', // 2MB limit
-        ]);
+    // ✅ Restore stock
+    $product = Product::find($booking->product_id);
+    $product->increment('stock', 1);
+    $product->save();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+    // ✅ Update booking status
+    $booking->status = 'canceled';
+    $booking->save();
 
-        // ✅ Store Image
-        $path = $request->file('receipt')->store('receipts', 'public');
+    // ✅ Send Cancellation Email
+    try {
+        Mail::to($booking->user->email)->send(new BookingCanceledMail($booking));
+    } catch (\Exception $e) {
+        \Log::error('Error sending cancellation email: ' . $e->getMessage());
+    }
 
-        // ✅ Update Booking Record
-        $booking = Booking::find($request->booking_id);
-        $booking->gcash_receipt = $path;
-        $booking->save();
+    return response()->json(['success' => true, 'message' => 'Booking canceled successfully. A confirmation email has been sent.']);
+}
 
+public function uploadReceipt(Request $request)
+{
+    // ✅ Validate request
+    $validator = Validator::make($request->all(), [
+        'booking_id' => 'required|exists:bookings,id',
+        'receipt' => 'required|image|mimes:jpg,png,jpeg|max:2048', // 2MB limit
+    ]);
+
+    if ($validator->fails()) {
         return response()->json([
-            'success' => true,
-            'message' => 'Receipt uploaded successfully',
-            'receipt_path' => asset("storage/$path"),
-        ]);
+            'success' => false,
+            'message' => 'Validation failed. Please check your inputs.',
+            'errors' => $validator->errors(),
+        ], 422);
     }
+
+    // ✅ Ensure booking exists
+    $booking = Booking::find($request->booking_id);
+    if (!$booking) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid booking. Please try again.',
+        ], 400);
+    }
+
+    // ✅ Ensure product exists
+    $product = Product::find($booking->product_id);
+    if (!$product) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Product not found.',
+        ], 404);
+    }
+
+    // ✅ Prevent stock deduction if already reserved
+    if ($booking->gcash_receipt) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Receipt already uploaded! Product has been reserved.',
+        ], 400);
+    }
+
+    // ✅ Ensure stock is available
+    if ($product->stock <= 0) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Product is out of stock! Please contact support.',
+        ], 400);
+    }
+
+    // ✅ Store receipt in "storage/app/public/receipts"
+    $path = $request->file('receipt')->store('receipts', 'public');
+
+    // ✅ Deduct stock only on first receipt upload
+    $product->decrement('stock', 1);
+    $product->save();
+
+    // ✅ Update booking with receipt path
+    $booking->gcash_receipt = $path;
+    $booking->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Receipt uploaded successfully! Product has been reserved.',
+        'receipt_path' => asset("storage/$path"),
+    ]);
+}
+
 
     public function store(Request $request)
 {
@@ -175,20 +208,19 @@ class BookingController extends Controller
         'end_date' => 'required|date|after:start_date',
         'added_price' => 'required|numeric',
         'total_price' => 'required|numeric',
-        'voucher_fee' => 'nullable|numeric|min:0', // ✅ Validate voucher_fee
+        'discounted_price' => 'nullable|numeric|min:0',
+        'voucher_fee' => 'nullable|numeric|min:0',
     ]);
 
     if (!auth()->check()) {
         return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
     }
 
-    // ✅ Convert dates to MySQL-compatible format (YYYY-MM-DD)
+    $user = auth()->user();
     $startDate = Carbon::parse($validated['start_date'])->format('Y-m-d');
     $endDate = Carbon::parse($validated['end_date'])->format('Y-m-d');
-
     $referenceNumber = strtoupper(substr(md5(uniqid()), 0, 10));
 
-    // ✅ Create booking with `voucher_fee`
     $booking = Booking::create([
         'user_id' => auth()->id(),
         'product_id' => $validated['product_id'],
@@ -196,10 +228,14 @@ class BookingController extends Controller
         'end_date' => $endDate,
         'added_price' => $validated['added_price'],
         'total_price' => $validated['total_price'],
-        'voucher_fee' => $validated['voucher_fee'] ?? 0.00, // ✅ Default to 0.00 if not provided
+        'discounted_price' => $validated['discounted_price'] ?? $validated['total_price'],
+        'voucher_fee' => $validated['voucher_fee'] ?? 0.00,
         'reference_number' => $referenceNumber,
         'status' => 'pending',
     ]);
+
+    // ✅ Send Booking Confirmation Email
+    Mail::to($user->email)->send(new BookingConfirmationMail($booking));
 
     return response()->json([
         'success' => true,
@@ -227,7 +263,7 @@ class BookingController extends Controller
                                    ->count();
 
         // ✅ Ensure user has all milestone points
-            $earnedPoints = floor($user->total_bookings / 25) * 100;
+            $earnedPoints = floor($user->total_bookings / 3) * 100;
             $user->loyalty_points = $earnedPoints;
                     
 

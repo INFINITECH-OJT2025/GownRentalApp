@@ -16,6 +16,8 @@
         <li><strong>Total Price:</strong> ₱{{ number_format($booking->total_price, 2) }}</li>
     </ul>
 
+    <p><strong>Important:</strong> To complete your booking, please ensure you upload your payment receipt. Your booking will not be approved unless the payment receipt is submitted and verified by the admin.</p>
+
     <p>If you have any questions, please contact us at <strong>{{ env('MAIL_FROM_ADDRESS') }}</strong>.</p>
 
     <p>Best Regards,</p>

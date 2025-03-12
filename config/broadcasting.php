@@ -44,6 +44,11 @@ return [
         'useTLS' => env('PUSHER_SCHEME', 'https') === 'https',
     ],
 
+    'ably' => [
+            'driver' => 'ably',
+            'key' => env('ABLY_API_KEY'),
+        ],
+
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
             ],

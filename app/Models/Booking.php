@@ -20,6 +20,7 @@ class Booking extends Model
         'status',
         'reference_number',
         'voucher_fee', 
+        'discounted_price'
     ];
     
 
@@ -35,3 +36,5 @@ class Booking extends Model
         return $this->belongsTo(Product::class);
     }
 }
+
+

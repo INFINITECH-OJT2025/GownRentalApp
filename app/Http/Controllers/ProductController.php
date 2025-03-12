@@ -8,33 +8,61 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     public function index()
-{
-    // ✅ Only fetch products where `is_hidden = 0`
-    $products = Product::where('is_hidden', 0)->get();  
-
-    $products->transform(function ($product) {
-        $product->image_url = asset('storage/' . ltrim($product->image, 'storage/'));
-        $blockedDates = [];
-        if ($product->start_date && $product->end_date) {
-            $start = new \DateTime($product->start_date);
-            $end = new \DateTime($product->end_date);
-
-            while ($start <= $end) {
-                $blockedDates[] = $start->format('Y-m-d');
-                $start->modify('+1 day');
+    {
+        // ✅ Fetch only visible products (`is_hidden = 0`)
+        $products = Product::where('is_hidden', 0)->get();  
+    
+        $products->transform(function ($product) {
+            $product->image_url = asset('storage/' . ltrim($product->image, 'storage/'));
+    
+            // ✅ Calculate blocked dates
+            $blockedDates = [];
+            if ($product->start_date && $product->end_date) {
+                $start = new \DateTime($product->start_date);
+                $end = new \DateTime($product->end_date);
+                while ($start <= $end) {
+                    $blockedDates[] = $start->format('Y-m-d');
+                    $start->modify('+1 day');
+                }
             }
-        }
+            $product->blocked_dates = $blockedDates;
+    
+            // ✅ Include stock and stock status
+            $product->stock_status = $product->stock > 0 ? 'Available' : 'Out of Stock';
+    
+            return $product;
+        });
+    
+        return response()->json([
+            'success' => true,
+            'data' => $products
+        ]);
+    }
+    
 
-        $product->blocked_dates = $blockedDates; // ✅ Send blocked dates to frontend
+public function updateDiscount(Request $request, $id)
+{
+    $validated = $request->validate([
+        'discount_percentage' => 'nullable|numeric|min:0|max:100',
+    ]);
 
-        return $product;
-    });
+    $product = Product::find($id);
+
+    if (!$product) {
+        return response()->json(['success' => false, 'message' => 'Product Loading'], 404);
+    }
+
+    if ($request->has('discount_percentage')) {
+        $product->applyDiscount($request->discount_percentage);
+    }
 
     return response()->json([
         'success' => true,
-        'data' => $products
+        'message' => 'Discount updated successfully',
+        'product' => $product
     ]);
-}      
+}
+
 
     public function getCategories()
     {
@@ -47,28 +75,31 @@ class ProductController extends Controller
     }
 
     public function show($id)
-    {
-        $product = Product::find($id);
-    
-        if (!$product) {
-            return response()->json(['success' => false, 'message' => 'Product not found'], 404);
-        }
-    
-        return response()->json([
-            'success' => true,
-            'product' => [
-                'id' => $product->id,
-                'name' => $product->name,
-                'image_url' => asset('storage/' . $product->image),
-                'price' => $product->price,
-                'stock' => $product->stock,
-                'description' => $product->description,
-                'category' => $product->category,
-                'start_date' => $product->start_date,
-                'end_date' => $product->end_date
-            ]
-        ]);
-    }    
+{
+    $product = Product::find($id);
+
+    if (!$product) {
+        return response()->json(['success' => false, 'message' => 'Product Loading'], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'product' => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'image_url' => asset('storage/' . $product->image),
+            'price' => $product->price,
+            'discounted_price' => $product->discounted_price,
+            'stock' => $product->stock,
+            'stock_status' => $product->stock > 0 ? 'Available' : 'Out of Stock', // ✅ Add stock status
+            'description' => $product->description,
+            'category' => $product->category,
+            'start_date' => $product->start_date,
+            'end_date' => $product->end_date
+        ]
+    ]);
+}
+
 
 public function update(Request $request, $id)
 {

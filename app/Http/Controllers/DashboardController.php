@@ -8,13 +8,49 @@ use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\Product;
 use App\Models\Booking;
-use App\Models\StockAdjustments;
+use App\Models\StockAdjustment;
+use App\Mail\BookingStatusUpdateMail;
+use Illuminate\Support\Facades\Mail;
 
 class DashboardController extends Controller
 {
     /**
      * Fetch dashboard statistics.
+     * 
+     * 
      */
+
+//      public function getBookingDates(Request $request)
+// {
+//     try {
+//         // Fetch bookings with start date and status
+//         $bookings = Booking::select('start_date', 'status')
+//             ->whereIn('status', ['pending', 'approved', 'picked up', 'returned']) // Filter valid statuses
+//             ->get();
+
+//         // Return the start dates of bookings
+//         $bookingDates = $bookings->map(function ($booking) {
+//             return [
+//                 'start_date' => $booking->start_date->format('Y-m-d'), // Format date for consistency
+//                 'status' => $booking->status
+//             ];
+//         });
+
+//         return response()->json([
+//             'success' => true,
+//             'bookingDates' => $bookingDates,
+//         ]);
+//     } catch (\Exception $e) {
+//         // Log any errors
+//         Log::error('Error fetching booking dates: ' . $e->getMessage());
+
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Server error: ' . $e->getMessage()
+//         ], 500);
+//     }
+// }
+
     public function getStats(Request $request)
     {
         // Ensure the user is authenticated
@@ -31,15 +67,18 @@ class DashboardController extends Controller
             $usersCount = User::count();
             $productsCount = Product::count();
             $bookingsCount = Booking::count();
-            $totalRevenue = Booking::where('status', 'approved')->sum('total_price');
+            // ✅ Total revenue from "approved", "picked up", and "returned" bookings
+            $totalRevenue = Booking::whereIn('status', ['approved', 'picked up', 'returned'])->sum('total_price');
             $pendingBookings = Booking::where('status', 'pending')->count();
-            $completedBookings = Booking::where('status', 'approved')->count();
-
+            $completedBookings = Booking::whereIn('status', ['returned'])->count(); // ✅ Adjusted to include all successful bookings
             // Group bookings per month for a bar chart
-            $monthlyBookings = Booking::selectRaw('MONTH(created_at) as month, COUNT(id) as count')
-                ->groupBy('month')
-                ->orderBy('month', 'asc')
-                ->get();
+            $monthlyBookings = Booking::selectRaw('YEAR(created_at) as year, MONTH(created_at) as month, COUNT(id) as count')
+            ->whereIn('status', ['approved', 'picked up', 'returned']) // ✅ Filter relevant statuses
+            ->groupBy('year', 'month')
+            ->orderBy('year', 'desc')
+            ->orderBy('month', 'asc')
+            ->get();
+        
 
             Log::info('Dashboard statistics fetched successfully.');
 
@@ -65,18 +104,21 @@ class DashboardController extends Controller
         }
     }
 
-    /**
-     * Fetch all products.
-     */
     public function getProducts()
     {
         try {
             Log::info('Fetching visible products.');
             $products = Product::where('is_hidden', false)->get();
     
+            // ✅ Ensure full URL is always returned
+            $products->transform(function ($product) {
+                $product->image_url = url("storage/{$product->image}");
+                return $product;
+            });
+    
             return response()->json([
                 'success' => true,
-                'products' => $products
+                'data' => $products
             ]);
         } catch (\Exception $e) {
             Log::error('Error fetching products: ' . $e->getMessage());
@@ -87,49 +129,62 @@ class DashboardController extends Controller
             ], 500);
         }
     }
+    
 
     public function addStock(Request $request, $id) {
+        // ✅ Log the incoming request
+        \Log::info('addStock Request:', $request->all());
+    
+        // ✅ Validate the stock field
         $validated = $request->validate(['stock' => 'required|integer|min:1']);
     
         try {
             $product = Product::findOrFail($id);
+            
+            // ✅ Ensure stock is a valid number
+            if (!is_numeric($validated['stock']) || $validated['stock'] < 1) {
+                return response()->json(['success' => false, 'message' => 'Invalid stock quantity'], 400);
+            }
+    
             $product->increment('stock', $validated['stock']);
     
-            // ✅ Log stock adjustment using StockAdjustment
+            // ✅ Log stock adjustment
             StockAdjustment::create([
                 'product_id' => $product->id,
                 'stock_added' => $validated['stock'],
-                'remarks' => 'Stock manually adjusted' // Optional remarks
+                'remarks' => 'Stock manually adjusted'
             ]);
     
             return response()->json(['success' => true, 'message' => 'Stock updated successfully']);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            \Log::error('Error updating stock: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Server error: ' . $e->getMessage()], 500);
         }
     }
     
-    public function getStockLogs()
-{
-    try {
-        $logs = StockAdjustment::with('product:id,name')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($log) {
-                return [
-                    'product_name' => $log->product->name ?? 'Unknown Product',
-                    'stock_added' => $log->stock_added,
-                    'remarks' => $log->remarks ?? 'No remarks',
-                    'created_at' => $log->created_at->format('Y-m-d H:i:s'),
-                ];
-            });
-
-        return response()->json(['success' => true, 'data' => $logs]);
-    } catch (\Exception $e) {
-        \Log::error('Error fetching stock logs: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Server error: ' . $e->getMessage()], 500);
+    
+    public function getStockLogs() {
+        try {
+            $logs = StockAdjustment::with('product:id,name')->get();
+    
+            return response()->json([
+                'success' => true,
+                'data' => $logs->map(function ($log) {
+                    return [
+                        'product_name' => optional($log->product)->name ?? 'Unknown Product',
+                        'stock_added' => $log->stock_added,
+                        'remarks' => $log->remarks ?? 'No remarks',
+                        'created_at' => $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : 'N/A',
+                    ];
+                }),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching stock logs: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Server error: ' . $e->getMessage()], 500);
+        }
     }
-}
-
+    
+    
     public function getInventory()
     {
         try {
@@ -408,69 +463,103 @@ public function updateProduct(Request $request, $id)
             
     public function index()
     {
-        $orders = Booking::all(); // Fetch all orders from the `bookings` table
+        $orders = Booking::with(['user:id,name,address', 'product:id,name'])
+            ->select('id', 'reference_number', 'user_id', 'product_id', 'start_date', 'end_date', 'total_price', 
+                     'added_price', 'voucher_fee', 'discounted_price', 'gcash_receipt', 'status', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($order) {
+                return [
+                    'id' => $order->id,
+                    'reference_number' => $order->reference_number,
+                    'user_name' => optional($order->user)->name ?? 'Unknown User',
+                    'user_address' => optional($order->user)->address ?? 'No Address Provided',
+                    'product_name' => optional($order->product)->name ?? 'Unknown Product',
+                    'start_date' => $order->start_date,
+                    'end_date' => $order->end_date,
+                    'total_price' => $order->total_price,
+                    'added_price' => $order->added_price ?? 0.00,
+                    'voucher_fee' => $order->voucher_fee ?? 0.00,
+                    'discounted_price' => $order->discounted_price ?? 0.00,
+                    'gcash_receipt' => $order->gcash_receipt ? asset('storage/' . $order->gcash_receipt) : null,
+                    'status' => $order->status,
+                    'created_at' => $order->created_at->format('Y-m-d H:i:s'),
+                ];
+            });
+    
+        \Log::info('Orders API Response:', $orders->toArray()); // ✅ Log output to check
+    
         return response()->json(['success' => true, 'data' => $orders]);
     }
+    
 
     public function updateStatus(Request $request, $id)
-    {
-        $booking = Booking::find($id);
-    
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
-        }
-    
-        $validated = $request->validate([
-            'status' => 'required|in:pending,approved,canceled'
-        ]);
-    
-        $product = Product::find($booking->product_id);
-    
-        if (!$product) {
-            return response()->json(['success' => false, 'message' => 'Product not found'], 404);
-        }
-    
-        // ✅ Deduct stock only when changing status to "approved"
-        if ($validated['status'] === 'approved' && $booking->status !== 'approved') {
-            if ($product->stock <= 0) {
-                return response()->json(['success' => false, 'message' => 'Not enough stock to approve this booking'], 400);
-            }
-    
-            $product->decrement('stock', 1); // ✅ Reduce stock count
-    
-            $startDate = new \DateTime($booking->start_date);
-            $endDate = new \DateTime($booking->end_date);
-    
-            while ($startDate <= $endDate) {
-                $startDate->modify('+1 day');
-            }
+{
+    $booking = Booking::find($id);
 
-            $product->save();
-        }
-    
-        if ($validated['status'] === 'canceled' && $booking->status === 'approved') {
-            $product->increment('stock', 1); // ✅ Restore stock
-
-            $startDate = new \DateTime($booking->start_date);
-            $endDate = new \DateTime($booking->end_date);
-    
-            while ($startDate <= $endDate) {
-                $dateStr = $startDate->format('Y-m-d');
-                $startDate->modify('+1 day');
-            }
-            $product->save();
-        }
-    
-        // ✅ Update status in database
-        $booking->status = $validated['status'];
-        $booking->save();
-    
-        return response()->json([
-            'success' => true,
-            'message' => "Booking status updated to {$validated['status']}",
-            'booking' => $booking
-        ]);
+    if (!$booking) {
+        return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
     }
-    
+
+    // ✅ Validate incoming status
+    $validated = $request->validate([
+        'status' => 'required|in:pending,approved,picked up,canceled,returned'
+    ]);
+
+    $product = Product::find($booking->product_id);
+
+    if (!$product) {
+        return response()->json(['success' => false, 'message' => 'Product not found'], 404);
+    }
+
+    // ✅ "Picked Up" should only come after "Approved"
+    if ($validated['status'] === 'picked up' && $booking->status !== 'approved') {
+        return response()->json(['success' => false, 'message' => 'Booking must be approved before it can be marked as picked up'], 400);
+    }
+
+    // ✅ Restore stock if canceled AFTER being approved
+    if ($validated['status'] === 'canceled' && $booking->status === 'approved') {
+        $product->increment('stock', 1);
+        $product->save();
+    }
+
+    // ✅ Restore stock if returned
+    if ($validated['status'] === 'returned' && $booking->status === 'approved') {
+        $product->increment('stock', 1);
+        $product->save();
+    }
+
+    // ✅ Update booking status
+    $booking->status = $validated['status'];
+    $booking->save();
+
+    // ✅ Define status messages for the email
+    $statusMessages = [
+        'pending' => "Your booking is currently pending. We will process it soon.",
+        'approved' => "Your booking has been approved. You can now proceed to pick up your gown.",
+        'picked up' => "Your booking has been marked as 'Picked Up'. Enjoy your gown!",
+        'canceled' => "Your booking has been canceled. If this was an error, please contact support.",
+        'returned' => "Thank you for returning the gown! We hope to see you again soon.",
+    ];
+
+    $statusMessage = $statusMessages[$validated['status']] ?? "Your booking status has been updated.";
+
+    // ✅ Send Email Notification using Laravel Mail
+    Mail::to($booking->user->email)->send(new BookingStatusUpdateMail($booking, $statusMessage));
+
+    return response()->json([
+        'success' => true,
+        'message' => "Booking status updated to {$validated['status']} and email sent successfully!",
+        'booking' => [
+            'id' => $booking->id,
+            'reference_number' => $booking->reference_number,
+            'status' => $booking->status,
+            'gcash_receipt' => $booking->gcash_receipt ? asset('storage/' . $booking->gcash_receipt) : null,
+        ],
+    ]);
+}
+
+
+
     
 }

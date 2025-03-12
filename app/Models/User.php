@@ -13,4 +13,10 @@ class User extends Authenticatable {
     protected $fillable = ['name', 'email', 'password', 'image', 'address', 'bio', 'role', 'payment_qrcode', 'total_bookings', 'loyalty_points'];
 
     protected $hidden = ['password', 'remember_token'];
+
+    public function loyaltyRewardsHistory()
+{
+    return $this->hasMany(Booking::class)->where('voucher_fee', '>', 0);
+}
+
 }
