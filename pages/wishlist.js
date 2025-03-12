@@ -9,13 +9,18 @@ import { FaTrash } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
+import ChatWidget from "../components/ChatWidget"; 
+import { useWishlist } from "../context/WishlistContext";
 
 export default function WishlistPage() {
-    const [wishlist, setWishlist] = useState([]);
+    const { wishlist, setWishlist } = useWishlist(); // ✅ Correct variable names
     const [search, setSearch] = useState("");
     const [filteredWishlist, setFilteredWishlist] = useState([]);
     const [selectedItems, setSelectedItems] = useState([]); // ✅ Track selected items
-
+    const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
+    const [deletingItemId, setDeletingItemId] = useState(null); // Track deleting item ID
+    
     useEffect(() => {
         fetchWishlist();
     }, []);
@@ -62,19 +67,20 @@ export default function WishlistPage() {
         }
     };
 
-    // ✅ Remove Selected Wishlist Items
     const removeSelectedItems = async () => {
         if (selectedItems.length === 0) {
             alert("No items selected for deletion.");
             return;
         }
-
+    
         const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedItems.length} items from your wishlist?`);
         if (!confirmDelete) return;
-
+    
+        setIsDeletingSelected(true); // ✅ Start loading state
+    
         const token = localStorage.getItem("token");
         if (!token) return alert("You must be logged in to remove items.");
-
+    
         try {
             await Promise.all(
                 selectedItems.map(productId =>
@@ -83,16 +89,18 @@ export default function WishlistPage() {
                     })
                 )
             );
-
+    
             setWishlist((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
             setFilteredWishlist((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
             setSelectedItems([]); // Reset selection
         } catch (error) {
             console.error("Error removing selected items:", error);
             alert("Failed to remove selected items.");
+        } finally {
+            setIsDeletingSelected(false); // ✅ Stop loading state
         }
     };
-
+    
     const removeFromWishlist = async (productId) => {
         const confirmDelete = window.confirm("Are you sure you want to remove this item from your wishlist?");
         if (!confirmDelete) return;
@@ -103,34 +111,27 @@ export default function WishlistPage() {
             return;
         }
     
+        setDeletingItemId(productId); // ✅ Start loading state for this item
+    
         try {
             await axios.delete(`http://127.0.0.1:8000/api/wishlist/${productId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
     
-            // ✅ Update UI after successful deletion
             setWishlist((prev) => prev.filter(item => item.product.id !== productId));
-            setFilteredWishlist((prev) => prev.filter(item => item.product.id !== productId));
+    
+            localStorage.setItem("wishlistUpdated", Date.now());
+            window.dispatchEvent(new Event("storage"));
     
             alert("✅ Item removed from wishlist.");
         } catch (error) {
             console.error("❌ Error removing product:", error);
-    
-            if (error.response) {
-                if (error.response.status === 401) {
-                    alert("⚠ You are not authorized. Please log in.");
-                } else if (error.response.status === 404) {
-                    alert("⚠ Item not found in wishlist.");
-                } else {
-                    alert(error.response.data.message || "❌ An error occurred.");
-                }
-            } else {
-                alert("❌ Network error. Check your connection.");
-            }
+            alert(error.response?.data?.message || "❌ An error occurred.");
+        } finally {
+            setDeletingItemId(null); // ✅ Stop loading state
         }
     };
     
-
     const removeAllItems = async () => {
         if (wishlist.length === 0) {
             alert("Wishlist is already empty.");
@@ -139,6 +140,8 @@ export default function WishlistPage() {
     
         const confirmDelete = window.confirm("Are you sure you want to delete ALL items from your wishlist?");
         if (!confirmDelete) return;
+    
+        setIsDeletingAll(true); // ✅ Start loading state
     
         const token = localStorage.getItem("token");
         if (!token) return alert("You must be logged in to clear your wishlist.");
@@ -159,18 +162,20 @@ export default function WishlistPage() {
         } catch (error) {
             console.error("Error clearing wishlist:", error);
             alert("❌ Failed to clear wishlist. Please try again.");
+        } finally {
+            setIsDeletingAll(false); // ✅ Stop loading state
         }
     };
     
 
-    // 🔎 Handle Search Filter
     useEffect(() => {
         const result = wishlist.filter(item =>
-            item.product.name.toLowerCase().includes(search.toLowerCase()) ||
-            item.product.price.toString().includes(search)
+            item?.product?.name?.toLowerCase().includes(search.toLowerCase()) || 
+            item?.product?.price?.toString().includes(search)
         );
         setFilteredWishlist(result);
     }, [search, wishlist]);
+    
 
     // 📌 Table Columns
     const columns = [
@@ -220,9 +225,17 @@ export default function WishlistPage() {
             name: "Remove",
             center: true,
             cell: (row) => (
-                <button onClick={() => removeFromWishlist(row.product.id)}> {/* ✅ Correct function call */}
+                <button onClick={() => removeFromWishlist(row.product.id)} disabled={deletingItemId === row.product.id}>
+                {deletingItemId === row.product.id ? (
+                    <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                ) : (
                     <FaTrash className="text-gray-600 hover:text-red-600 cursor-pointer" />
-                </button>
+                )}
+            </button>
+            
             )
         }
         
@@ -257,24 +270,46 @@ export default function WishlistPage() {
 
                 {/* 📌 Delete Buttons */}
                 <div className="flex space-x-4 mb-4">
-                    <button
-                        onClick={removeSelectedItems}
-                        className={`px-4 py-2 rounded-lg font-semibold ${
-                            selectedItems.length > 0 ? "bg-red-500 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
-                        }`}
-                        disabled={selectedItems.length === 0}
-                    >
-                        🗑️ Delete Selected ({selectedItems.length})
-                    </button>
-                    <button
-                        onClick={removeAllItems}
-                        className={`px-4 py-2 rounded-lg font-semibold ${
-                            wishlist.length > 0 ? "bg-red-600 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
-                        }`}
-                        disabled={wishlist.length === 0}
-                    >
-                        🚨 Delete All
-                    </button>
+                <button
+                    onClick={removeSelectedItems}
+                    className={`px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                        selectedItems.length > 0 ? "bg-red-500 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    }`}
+                    disabled={selectedItems.length === 0 || isDeletingSelected}
+                >
+                    {isDeletingSelected ? (
+                        <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            Deleting...
+                        </>
+                    ) : (
+                        <>🗑️ Delete Selected ({selectedItems.length})</>
+                    )}
+                </button>
+
+                <button
+                    onClick={removeAllItems}
+                    className={`px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                        wishlist.length > 0 ? "bg-red-600 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    }`}
+                    disabled={wishlist.length === 0 || isDeletingAll}
+                >
+                    {isDeletingAll ? (
+                        <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            Deleting...
+                        </>
+                    ) : (
+                        <>🚨 Delete All</>
+                    )}
+                </button>
+
                 </div>
 
                 {/* 📌 DataTable */}
@@ -294,6 +329,7 @@ export default function WishlistPage() {
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
             </footer>
         </div>
+        <ChatWidget />
         </AuthGuard>
     );
 }

@@ -9,13 +9,19 @@ import { FaTrash } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
-
+import ChatWidget from "../components/ChatWidget"; 
+import { useFavorites } from "../context/FavoritesContext"; // ✅ Import Favorites Context
 
 export default function FavoritesPage() {
-    const [selectedItems, setSelectedItems] = useState([]);
-    const [favorites, setFavorites] = useState([]);
+    const { favorites, setFavorites } = useFavorites(); // ✅ Correct use of context hook
+    const [selectedItems, setSelectedItems] = useState([]); // ✅ Fix: Add missing state
     const [search, setSearch] = useState("");
     const [filteredFavorites, setFilteredFavorites] = useState([]);
+
+    const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
+    const [deletingItemId, setDeletingItemId] = useState(null); // Track deleting item ID
+
 
     useEffect(() => {
         const token = localStorage.getItem("token");
@@ -68,47 +74,40 @@ export default function FavoritesPage() {
             return;
         }
     
+        setDeletingItemId(productId); // ✅ Start loading state for this item
+    
         try {
             await axios.delete(`http://127.0.0.1:8000/api/favorites/${productId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
     
-            // ✅ Update UI after successful deletion
             setFavorites((prev) => prev.filter(item => item.product.id !== productId));
             setFilteredFavorites((prev) => prev.filter(item => item.product.id !== productId));
     
             alert("✅ Item removed from favorites.");
         } catch (error) {
             console.error("❌ Error removing product:", error);
-    
-            if (error.response) {
-                if (error.response.status === 401) {
-                    alert("⚠ You are not authorized. Please log in.");
-                } else if (error.response.status === 404) {
-                    alert("⚠ Item not found in favorites.");
-                } else {
-                    alert(error.response.data.message || "❌ An error occurred.");
-                }
-            } else {
-                alert("❌ Network error. Check your connection.");
-            }
+            alert(error.response?.data?.message || "❌ An error occurred.");
+        } finally {
+            setDeletingItemId(null); // ✅ Stop loading state
         }
     };
     
 
-    // ✅ Remove Selected Items
     const removeSelectedItems = async () => {
         if (selectedItems.length === 0) {
             alert("No items selected for deletion.");
             return;
         }
-
+    
         const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedItems.length} items from your favorites?`);
         if (!confirmDelete) return;
-
+    
+        setIsDeletingSelected(true); // ✅ Start loading state
+    
         const token = localStorage.getItem("token");
         if (!token) return alert("You must be logged in to remove items.");
-
+    
         try {
             await Promise.all(
                 selectedItems.map(productId =>
@@ -117,48 +116,54 @@ export default function FavoritesPage() {
                     })
                 )
             );
-
+    
             setFavorites((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
             setFilteredFavorites((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
-            setSelectedItems([]);
+            setSelectedItems([]); // Reset selection
         } catch (error) {
             console.error("Error removing selected items:", error);
             alert("Failed to remove selected items.");
+        } finally {
+            setIsDeletingSelected(false); // ✅ Stop loading state
         }
     };
-
-    // ✅ Remove All Items
+    
     const removeAllItems = async () => {
         if (favorites.length === 0) {
             alert("Favorites list is already empty.");
             return;
         }
-
+    
         const confirmDelete = window.confirm("Are you sure you want to delete ALL items from your favorites?");
         if (!confirmDelete) return;
-
+    
+        setIsDeletingAll(true); // ✅ Start loading state
+    
         const token = localStorage.getItem("token");
         if (!token) return alert("You must be logged in to clear your favorites.");
-
+    
         try {
-            await axios.delete(`http://127.0.0.1:8000/api/favorites/clear`, {
+            await axios.delete("http://127.0.0.1:8000/api/favorites/clear", {
                 headers: { Authorization: `Bearer ${token}` }
             });
-
+    
             setFavorites([]);
             setFilteredFavorites([]);
             setSelectedItems([]);
         } catch (error) {
             console.error("Error clearing favorites:", error);
             alert("Failed to clear favorites.");
+        } finally {
+            setIsDeletingAll(false); // ✅ Stop loading state
         }
     };
+    
 
-    // ✅ Search Filter
     useEffect(() => {
         const result = favorites.filter(item =>
+            item.product && item.product.name && 
             item.product.name.toLowerCase().includes(search.toLowerCase()) ||
-            item.product.price.toString().includes(search)
+            (item.product && item.product.price && item.product.price.toString().includes(search))
         );
         setFilteredFavorites(result);
     }, [search, favorites]);
@@ -211,9 +216,17 @@ export default function FavoritesPage() {
             name: "Remove",
             center: true,
             cell: (row) => (
-                <button onClick={() => removeFromFavorites(row.product.id)}> {/* ✅ Fix function call */}
+            <button onClick={() => removeFromFavorites(row.product.id)} disabled={deletingItemId === row.product.id}>
+                {deletingItemId === row.product.id ? (
+                    <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                ) : (
                     <FaTrash className="text-gray-600 hover:text-red-600 cursor-pointer" />
-                </button>
+                )}
+            </button>
+
             )
         }
         
@@ -247,24 +260,46 @@ export default function FavoritesPage() {
 
                 {/* 📌 Delete Buttons */}
                 <div className="flex space-x-4 mb-4">
-                    <button
-                        onClick={removeSelectedItems}
-                        className={`px-4 py-2 rounded-lg font-semibold ${
-                            selectedItems.length > 0 ? "bg-red-500 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
-                        }`}
-                        disabled={selectedItems.length === 0}
-                    >
-                        🗑️ Delete Selected ({selectedItems.length})
-                    </button>
-                    <button
-                        onClick={removeAllItems}
-                        className={`px-4 py-2 rounded-lg font-semibold ${
-                            favorites.length > 0 ? "bg-red-600 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
-                        }`}
-                        disabled={favorites.length === 0}
-                    >
-                        🚨 Delete All
-                    </button>
+                <button
+                    onClick={removeSelectedItems}
+                    className={`px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                        selectedItems.length > 0 ? "bg-red-500 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    }`}
+                    disabled={selectedItems.length === 0 || isDeletingSelected}
+                >
+                    {isDeletingSelected ? (
+                        <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            Deleting...
+                        </>
+                    ) : (
+                        <>🗑️ Delete Selected ({selectedItems.length})</>
+                    )}
+                </button>
+
+                <button
+                    onClick={removeAllItems}
+                    className={`px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                        favorites.length > 0 ? "bg-red-600 text-white" : "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    }`}
+                    disabled={favorites.length === 0 || isDeletingAll}
+                >
+                    {isDeletingAll ? (
+                        <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            Deleting...
+                        </>
+                    ) : (
+                        <>🚨 Delete All</>
+                    )}
+                </button>
+
                 </div>
 
                 {/* DataTable */}
@@ -283,8 +318,10 @@ export default function FavoritesPage() {
             {/* Footer now sticks to the bottom */}
             <footer className="bg-pink-600 text-white text-center py-6 mt-auto">
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
+                 <ChatWidget />
             </footer>
         </div>
+        
         </AuthGuard>
     );
 }

@@ -56,3 +56,10 @@
   border-radius: 8px !important;
 }
 
+/* Ensure Table Header is Centered & Properly Sized */
+.data-table .rdt_TableHeadRow div:nth-child(10) {
+  text-align: center;
+  width: 270px; /* Same as column width */
+}
+
+

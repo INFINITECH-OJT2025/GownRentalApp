@@ -28,11 +28,17 @@ export default function SignupPage() {
         setLoading(true);
         setError(null);
         setSuccess(null);
-
+    
+        if (formData.password !== formData.password_confirmation) {
+            setError("Passwords do not match!");
+            setLoading(false);
+            return;
+        }
+    
         try {
             const response = await axios.post("http://127.0.0.1:8000/api/register", formData);
             localStorage.setItem("token", response.data.token);
-
+    
             setSuccess("You have been successfully signed up! Now you may log in.");
             
             // Redirect to login after 3 seconds
@@ -40,11 +46,17 @@ export default function SignupPage() {
                 router.push("/login");
             }, 3000);
         } catch (err) {
-            setError(err.response?.data?.message || "Something went wrong");
+            // ✅ Handle duplicate email error
+            if (err.response?.data?.error === "This email is already registered. Try logging in instead.") {
+                setError("This email is already registered. Please log in instead.");
+            } else {
+                setError(err.response?.data?.error || "Something went wrong.");
+            }
         } finally {
             setLoading(false);
         }
     };
+    
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-pink-100 to-pink-300 px-6">

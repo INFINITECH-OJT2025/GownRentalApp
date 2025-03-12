@@ -12,12 +12,14 @@ import Navbar from "../components/Navbar"; // Adjust path if needed
 import Head from "next/head";
 import { useWishlist } from "../context/WishlistContext";
 import { useFavorites } from "../context/FavoritesContext";
-
+import ChatWidget from "../components/ChatWidget"; 
+import { Toaster } from "react-hot-toast";
 
 export default function BrowsePage() {
-    
+    const [discountGroups, setDiscountGroups] = useState({});
     const [isOpen, setIsOpen] = useState(false);
     const { setFavorites, addToFavorites, favorites } = useFavorites(); // ✅ Use Favorites Context
+    const [loadingButton, setLoadingButton] = useState(null); // ✅ Track loading state for buttons
 
     // State to control the calendar visibility for each gown
     const [calendarOpen, setCalendarOpen] = useState({});
@@ -27,7 +29,7 @@ export default function BrowsePage() {
     const [categories, setCategories] = useState([]);
 
 
-    const [priceRange, setPriceRange] = useState(15000); // Default max price
+    const [priceRange, setPriceRange] = useState(50000); // Default max price
     const [rentalDetails, setRentalDetails] = useState({});
 
 
@@ -89,38 +91,61 @@ export default function BrowsePage() {
     
         fetchFavorites();
     }, []);
-
-    useEffect(() => {
-        axios.get("http://127.0.0.1:8000/api/categories")
-            .then((response) => {
-                if (response.data.success && Array.isArray(response.data.categories)) {
-                    setCategories(response.data.categories);
-                } else {
-                    setCategories([]);
-                }
-            })
-            .catch((error) => {
-                console.error("Error fetching categories:", error);
-                setCategories([]);
-            });
-    }, []);
-    
-
     
     useEffect(() => {
-        axios.get("http://127.0.0.1:8000/api/products")
-            .then((response) => {
+        const fetchProducts = async () => {
+            try {
+                const response = await axios.get("http://127.0.0.1:8000/api/products");
+                console.log("📡 API Response (All Products):", response.data); // ✅ Debug API Response
+    
                 if (response.data && Array.isArray(response.data.data)) {
-                    setProducts(response.data.data);
+                    const allProducts = response.data.data;
+                    
+                    // ✅ Debug Hidden Products
+                    console.log("🔍 Hidden Products:", allProducts.filter(p => p.is_hidden === 1));
+    
+                    const visibleProducts = allProducts.filter(product => product.is_hidden === 0);
+                    setProducts(visibleProducts);
+    
+                    // ✅ Ensure discounts are properly grouped
+                    const discountGroups = {};
+                    visibleProducts.forEach((product) => {
+                        if (product.discounted_price && product.price) {
+                            const discount = Math.round(((product.price - product.discounted_price) / product.price) * 100);
+                            if (discount > 0) {
+                                if (!discountGroups[discount]) {
+                                    discountGroups[discount] = [];
+                                }
+                                discountGroups[discount].push(product);
+                            }
+                        }
+                    });
+    
+                    setDiscountGroups(discountGroups);
                 } else {
+                    console.error("❌ Unexpected API Response:", response.data);
                     setProducts([]);
                 }
-            })
-            .catch((error) => {
-                console.error("Error fetching products:", error);
+            } catch (error) {
+                console.error("❌ API Fetch Error:", error);
                 setProducts([]);
-            });
+            }
+        };
+    
+        fetchProducts();
     }, []);
+    
+    
+        // Array of banner background colors
+        const bannerColors = [
+            "bg-red-500",
+            "bg-pink-500",
+            "bg-purple-500",
+            "bg-green-500",
+            "bg-yellow-500",
+            "bg-blue-500",
+        ];
+
 
     useEffect(() => {
         const fetchWishlist = async () => {
@@ -160,6 +185,22 @@ export default function BrowsePage() {
         );
     };
 
+    useEffect(() => {
+        axios.get("http://127.0.0.1:8000/api/categories")
+            .then((response) => {
+                if (response.data.success && Array.isArray(response.data.categories)) {
+                    setCategories(response.data.categories);
+                } else {
+                    setCategories([]);
+                }
+            })
+            .catch((error) => {
+                console.error("Error fetching categories:", error);
+                setCategories([]);
+            });
+    }, []);
+    
+
     const handleDateChange = (productId, productPrice, type, value) => {
         setRentalDetails((prev) => {
             const updatedDetails = { 
@@ -198,86 +239,135 @@ export default function BrowsePage() {
     const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
 
     return (
-        <AuthGuard>
-           
+         <AuthGuard>
+            <Toaster /> 
             <Head>
-                <title>Browser | Gown Rental</title> {/* ✅ Dynamic Title */}
+                <title>Browse | Gown Rental</title> {/* ✅ Dynamic Title */}
                 <meta name="description" content="Manage your profile and settings on Gown Rental." />
                 <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
             </Head>
-            <div className="min-h-screen bg-gray-100 text-gray-800 font-poppins">
-                <Navbar /> 
+        <div className="min-h-screen bg-gray-100 text-gray-800 font-poppins">
+            <Navbar /> {/* Now using the Navbar component */}
 
-                {/* Hero Section */}
-                <section className="relative bg-[url('/gown-hero.jpg')] bg-cover bg-center bg-no-repeat min-h-[60vh] flex items-center">
-                    <div className="container mx-auto px-6 text-center md:text-left pt-24">
-                        <div className="mt-6 flex flex-wrap justify-center md:justify-start">
-                            <Link href="/browse">
-                                <button className="bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition">
-                                    Gowns
-                                </button>
-                            </Link>
-                            <Link href="/about">
-                                <button className="ml-4 border-2 border-white text-gray hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition">
-                                    Learn More
-                                </button>
-                            </Link>
-                        </div>
+            {/* Hero Section */}
+            <section className="relative bg-[url('/gown-hero.jpg')] bg-cover bg-center bg-no-repeat min-h-[60vh] flex items-center">
+                <div className="container mx-auto px-6 text-center md:text-left pt-24">
+                    <div className="mt-6 flex flex-wrap justify-center md:justify-start">
+                    <Link href="/browse">
+                    <button 
+                        onClick={() => setLoadingButton("browse")}
+                        disabled={loadingButton === "browse"}
+                        className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                            ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                        {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
+                    </button>
+                </Link>
+
+                <Link href="/about">
+                    <button 
+                        onClick={() => setLoadingButton("learn")}
+                        disabled={loadingButton === "learn"}
+                        className={`ml-4 border-2 border-white text-gray hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                            ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                        {loadingButton === "learn" ? "Loading..." : "Learn More"}
+                    </button>
+                </Link>
+
+
                     </div>
-                </section>
+                </div>
+            </section>
+            {/* Main Content - Sidebar & Products */}
+            <div className="container mx-auto px-4 md:px-6 mt-10 flex flex-col md:flex-row gap-8">
+                {/* Sidebar - Filters */}
+                <aside className="w-full md:w-1/4 bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-semibold text-gray-800">Filters</h2>
 
-                {/* Main Content - Sidebar & Products */}
-                <div className="container mx-auto px-4 md:px-6 mt-10 flex flex-col md:flex-row gap-8">
-                    {/* Sidebar - Filters */}
-                    <aside className="w-full md:w-1/4 bg-white p-6 rounded-lg shadow-md">
-                        <h2 className="text-xl font-semibold text-gray-800">Filters</h2>
-                        <ul className="mt-2 space-y-2 text-gray-600">
-                            {categories.length > 0 ? (
-                                categories.map((category) => (
-                                    <li key={category}>
-                                        <input
-                                            type="checkbox"
-                                            className="mr-2"
-                                            checked={selectedCategories.includes(category)}
-                                            onChange={() => handleCategoryChange(category)}
-                                        />
-                                        {category}
-                                    </li>
-                                ))
-                            ) : (
-                                <p>Loading categories...</p>
-                            )}
-                        </ul>
+                    {/* Category Filters */}
+                    <ul className="mt-2 space-y-2 text-gray-600">
+                        {categories.length > 0 ? (
+                            categories.map((category) => (
+                                <li key={category}>
+                                    <input
+                                        type="checkbox"
+                                        className="mr-2"
+                                        checked={selectedCategories.includes(category)}
+                                        onChange={() => handleCategoryChange(category)}
+                                    />
+                                    {category}
+                                </li>
+                            ))
+                        ) : (
+                            <p>Loading categories...</p>
+                        )}
+                    </ul>
 
-                        {/* Price Range */}
-                        <div className="mt-6">
-                            <h3 className="text-lg font-medium text-pink-600">Price Range</h3>
-                            <input 
-                                type="range"
-                                min="0"
-                                max="15000"
-                                value={priceRange}
-                                onChange={(e) => setPriceRange(Number(e.target.value))}
-                                className="w-full mt-2 appearance-none bg-pink-300 h-2 rounded-lg outline-none cursor-pointer"
-                            />
-                            <p className="text-pink-600 text-sm">Up to ₱{priceRange}</p>
-                        </div>
-                    </aside>
+                    {/* Price Range */}
+                    <div className="mt-6">
+                        <h3 className="text-lg font-medium text-pink-600">Price Range</h3>
+                        <input 
+                            type="range"
+                            min="0"
+                            max="50000"
+                            value={priceRange}
+                            onChange={(e) => setPriceRange(Number(e.target.value))}
+                            className="w-full mt-2 appearance-none bg-pink-300 h-2 rounded-lg outline-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:w-5
+                            [&::-webkit-slider-thumb]:h-5
+                            [&::-webkit-slider-thumb]:bg-pink-600
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:cursor-pointer"
+                        />
+                        <p className="text-pink-600 text-sm">Up to ₱{priceRange}</p>
+                    </div>
+
+                    {/* ✅ Dynamic Promotional Banners */}
+                    <div className="mt-8">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">🔥 Promotions</h3>
+
+                        {Object.keys(discountGroups).length > 0 ? (
+                            Object.keys(discountGroups).map((discount, idx) => (
+                                <div 
+                                    key={idx} 
+                                    className={`p-4 rounded-lg shadow-md my-3 text-white text-center ${bannerColors[idx % bannerColors.length]}`}
+                                >
+                                    🎉 {discount}% OFF on:
+                                    <ul className="mt-2">
+                                        {discountGroups[discount].map((product, index) => (
+                                            <li
+                                                key={product.id}
+                                                className="inline-block px-3 py-1 font-semibold text-white bg-gray-900 rounded-lg mx-1"
+                                            >
+                                                {product.name}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-gray-500 text-sm">No promotions available.</p>
+                        )}
+                    </div>
+                </aside>
+
 
                     {/* Product Section */}
                     <div className="w-full md:w-3/4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-semibold text-gray-800">Available Gowns</h2>
-                            <input
-                                type="text"
-                                placeholder="Search gowns..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:ring focus:ring-pink-300"
-                            />
-                        </div>
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-semibold text-gray-800">Available Gowns</h2>
+                        <input
+                            type="text"
+                            placeholder="Search gowns..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:ring focus:ring-pink-300"
+                        />
+                    </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
                                 {paginatedProducts.length > 0 ? (
                                     paginatedProducts.map((product) => (
                                     <div key={product.id} className="bg-white p-4 md:p-6 rounded-lg shadow-md hover:shadow-lg transition">
@@ -286,17 +376,17 @@ export default function BrowsePage() {
                                         <Link href={`/products/${product.id}`} className="block">
                                         <div className="relative w-full h-48 md:h-64 flex justify-center items-center">
                                         {product.image ? (
-                                         <Image 
+                                        <Image 
                                          src={`http://127.0.0.1:8000/storage/${product.image}`} 
                                          alt={product.name}
                                          width={200}
                                          height={400}
                                          className="rounded-lg object-cover"
                                        />
-                                       
                                             ) : (
                                             <p>No Image Available</p>
                                             )}
+
                                         </div>
                                         </Link>
 
@@ -306,30 +396,52 @@ export default function BrowsePage() {
                                         </Link>
 
                                         <p className="text-gray-500 text-sm">{product.category || "Uncategorized"}</p>
-                                        <p className="text-pink-600 text-lg font-bold"> ₱{Number(product.price).toLocaleString()}</p>
+                                        <div className="mt-2 flex items-center space-x-2">
+                                            {product.discounted_price && product.discounted_price < product.price ? (
+                                                <>
+                                                    <p className="text-red-500 text-lg font-bold line-through">
+                                                        ₱{Number(product.price).toLocaleString()}
+                                                    </p>
+                                                    <p className="text-green-600 text-sm font-semibold">
+                                                        ({Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF)
+                                                    </p>
+                                                    <p className="text-pink-600 text-xl font-bold">
+                                                        ₱{Number(product.discounted_price).toLocaleString()}
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p className="text-pink-600 text-lg font-bold">₱{Number(product.price).toLocaleString()}</p>
+                                            )}
+                                        </div>
 
                                         {/* Book Button (Click redirects to product page) */}
-                                        <Link href={`/products/${product.id}`} className="block">
-                                        <button className="w-full mt-3 md:mt-4 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-2 px-4 md:px-6 rounded-lg shadow-md transition">
-                                            Book
+                                        <Link href={`/products/${product.id}`}>
+                                        <button 
+                                            onClick={() => setLoadingButton(`book-${product.id}`)}
+                                            disabled={loadingButton === `book-${product.id}`}
+                                            className={`w-full mt-3 md:mt-4 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-2 px-4 md:px-6 rounded-lg shadow-md transition
+                                                ${loadingButton === `book-${product.id}` ? "opacity-50 cursor-not-allowed" : ""}`}
+                                        >
+                                            {loadingButton === `book-${product.id}` ? "Loading..." : "Book"}
                                         </button>
-                                        </Link>
+                                    </Link>
 
-                                           {/* Wishlist & Favorite Icons (No Redirect) */}
-                                           <div className="flex justify-center space-x-4 mt-3 md:mt-4">
+
+                                        {/* Wishlist & Favorite Icons (No Redirect) */}
+                                        <div className="flex justify-center space-x-4 mt-3 md:mt-4">
                                         
-                                        {/* Wishlist Icon */}
-                                        <button onClick={() => addToWishlist(product.id)} className="relative group">
-                                <FaHeart 
-                                    className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                />
-                                <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
-                                    {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
-                                </div>
-                            </button>
+                                            {/* Wishlist Icon */}
+                                            <button onClick={() => addToWishlist(product.id)} className="relative group">
+                                    <FaHeart 
+                                        className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                    />
+                                    <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
+                                        {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
+                                    </div>
+                                </button>
 
-                                    {/* Favorite Icon */} 
-                                    <button onClick={() => addToFavorites(product.id)} className="relative group">
+                                       {/* Favorite Icon */} 
+                                       <button onClick={() => addToFavorites(product.id)} className="relative group">
                                         <FaStar 
                                             className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
                                         />
@@ -371,6 +483,7 @@ export default function BrowsePage() {
                 {/* Footer */}
                 <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
+                <ChatWidget />
                 </footer>
             </div>
         </AuthGuard>

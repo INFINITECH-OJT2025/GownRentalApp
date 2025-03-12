@@ -5,6 +5,9 @@ import axios from "axios";
 import AdminSidebar from "../../components/AdminSidebar";
 import { Bar } from "react-chartjs-2";
 import Image from "next/image";
+import Head from "next/head";
+import ChatWidgetPage from "../../components/chat"; 
+
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -23,7 +26,9 @@ export default function AnalyticsPage() {
     const [error, setError] = useState(null);
     const [darkMode, setDarkMode] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [user, setUser] = useState(null);
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [availableYears, setAvailableYears] = useState([]);
+    const filteredBookings = stats?.monthlyBookings?.filter(item => item.year === selectedYear) || [];
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -37,8 +42,16 @@ export default function AnalyticsPage() {
                 const response = await axios.get("http://127.0.0.1:8000/api/dashboard/stats", {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+
                 if (response.data.success) {
                     setStats(response.data.stats);
+
+                    // Extract available years from the `monthlyBookings`
+                    const years = [...new Set(response.data.stats.monthlyBookings.map(item => item.year))];
+                    setAvailableYears(years);
+                    
+                    // Ensure the selected year is the most recent available
+                    setSelectedYear(Math.max(...years));
                 } else {
                     setError("Failed to load analytics.");
                 }
@@ -51,12 +64,13 @@ export default function AnalyticsPage() {
         fetchStats();
     }, []);
 
+
     const chartData = {
-        labels: stats?.monthlyBookings?.map((item) => `Month ${item.month}`) || [],
+        labels: filteredBookings.length > 0 ? filteredBookings.map(item => `Month ${item.month}`) : ["No Data"],
         datasets: [
             {
-                label: "Bookings per Month",
-                data: stats?.monthlyBookings?.map((item) => item.count) || [],
+                label: `Bookings Per Month in ${selectedYear}`,
+                data: filteredBookings.length > 0 ? filteredBookings.map(item => item.count) : [0], // ✅ Prevents NaN
                 backgroundColor: "#007C3D",
                 borderColor: "#004D1A",
                 borderWidth: 1,
@@ -65,31 +79,17 @@ export default function AnalyticsPage() {
     };
 
     return (
+        <>
+        <Head>
+        <title>Analytics | Gown Rental</title> {/* ✅ Dynamic Title */}
+        <meta name="description" content="Manage your profile and settings on Gown Rental." />
+        <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
+    </Head>
         <div className={`${darkMode ? "dark" : ""} flex h-screen bg-white dark:bg-[#0F172A]`}>
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
             <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
                 <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
                     <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
-                    <div className="flex items-center space-x-2 md:space-x-4 mr-20">
-                        {user?.image ? (
-                            <Image
-                                src={`http://127.0.0.1:8000/storage/profile_pictures/${user.image}`}
-                                alt="Profile"
-                                width={32}
-                                height={32}
-                                className="rounded-full border border-gray-300"
-                            />
-                        ) : (
-                            <Image
-                                src="/images/default_avatar.png"
-                                alt="Default Profile"
-                                width={32}
-                                height={32}
-                                className="rounded-full border border-gray-300"
-                            />
-                        )}
-                        <span className="dark:text-white text-sm md:text-base">{user?.name || "Admin"}</span>
-                    </div>
                 </header>
                 <main className="p-6 mt-16">
                     <nav className="my-6 flex px-5 py-3 text-gray-700 rounded-lg bg-gray-50 dark:bg-[#1E293B]" aria-label="Breadcrumb">
@@ -114,14 +114,31 @@ export default function AnalyticsPage() {
                             </li>
                         </ol>
                     </nav>
+
+                    {/* ✅ Year Filter Dropdown */}
+                    <div className="flex justify-end mb-4">
+                        <label className="mr-2 font-semibold text-gray-700 dark:text-white">Filter by Year:</label>
+                        <select 
+                            value={selectedYear} 
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-white focus:ring focus:ring-pink-300"
+                        >
+                            {availableYears.map((year) => (
+                                <option key={year} value={year}>
+                                    {year}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {stats && [
                             { title: "Total Users", value: stats.users },
                             { title: "Total Products", value: stats.products },
-                            { title: "Total Bookings", value: stats.bookings },
+                            { title: "Total Bookings (pending, canceled, picked up, & returned)", value: stats.bookings },
                             { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}` },
                             { title: "Pending Bookings", value: stats.pendingBookings },
-                            { title: "Completed Bookings", value: stats.completedBookings },
+                            { title: "Completed Bookings (returned)", value: stats.completedBookings },
                         ].map((item, index) => (
                             <div key={index} className="bg-white p-6 rounded-lg shadow-md">
                                 <h2 className="text-lg font-semibold text-gray-700">{item.title}</h2>
@@ -129,12 +146,16 @@ export default function AnalyticsPage() {
                             </div>
                         ))}
                     </div>
+
+                    {/* 📊 Bar Chart */}
                     <div className="bg-white p-6 rounded-lg shadow-md mt-8">
-                        <h2 className="text-lg font-semibold text-gray-700 mb-4">Bookings Per Month</h2>
+                        <h2 className="text-lg font-semibold text-gray-700 mb-4">Bookings Per Month ({selectedYear})</h2>
                         <Bar data={chartData} />
                     </div>
                 </main>
             </div>
         </div>
+        <ChatWidgetPage />
+        </>
     );
 }

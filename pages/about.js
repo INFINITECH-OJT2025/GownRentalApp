@@ -4,6 +4,7 @@ import Head from "next/head";
 import AuthGuard from "../components/AuthGuard";
 import Link from "next/link";
 import Navbar from "../components/Navbar"; // Ensure Navbar is in the components folder
+import ChatWidget from "../components/ChatWidget"; 
 
 export default function AboutPage() {
     return (
@@ -65,6 +66,7 @@ export default function AboutPage() {
             {/* Footer */}
             <footer className="bg-pink-700 text-white text-center py-6 mt-10">
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
+             <ChatWidget />
             </footer>
         </div>
         </AuthGuard>

@@ -14,6 +14,8 @@ import { useWishlist } from "../../context/WishlistContext";
 import { useFavorites } from "../../context/FavoritesContext";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 import * as tf from "@tensorflow/tfjs";
+import ReviewSection from "../../components/ReviewSection";
+import ChatWidget from "../../components/ChatWidget"; 
 
 export default function ProductDetailPage() {
   const videoRef = useRef(null);
@@ -30,39 +32,48 @@ export default function ProductDetailPage() {
   const [detector, setDetector] = useState(null);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [receiptImage, setReceiptImage] = useState(null);
+  const chestWidthHistoryRef = useRef([]); // ✅ Store history in ref
+  const maxHistorySize = 10; // 🔥 Adjust the smoothing window size
+
 
   useEffect(() => {
     const setupCamera = async () => {
       if (!videoRef.current) return;
   
       try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   
-          if (videoRef.current) {
-              videoRef.current.srcObject = stream;
-              videoRef.current.onloadedmetadata = () => {
-                  videoRef.current.play();
-                  setVideoLoaded(true); // ✅ Ensure video is loaded
-              };
-          }
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play();
+            setVideoLoaded(true); // ✅ Now video is fully loaded before detection starts
+          };
+        }
       } catch (err) {
-          console.error("🚨 Camera access denied:", err);
+        console.error("🚨 Camera access denied:", err);
       }
-  };
-  
+    };
 
-    const loadPoseDetection = async () => {
-      await tf.ready();
-      await tf.setBackend("webgl");
-  
-      const model = poseDetection.SupportedModels.MoveNet;
-      const newDetector = await poseDetection.createDetector(model, {
-          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-      });
-  
-      console.log("✅ Pose Detector Loaded");
-      setDetector(newDetector);
-  };  
+
+ const loadPoseDetection = async () => {
+    try {
+        await tf.ready();
+        await tf.setBackend("webgl");
+
+        const model = poseDetection.SupportedModels.MoveNet;
+        const newDetector = await poseDetection.createDetector(model, {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        });
+
+        console.log("✅ Pose Detector Loaded");
+        setDetector(newDetector);
+    } catch (error) {
+        console.error("❌ Pose Detection Model Failed to Load:", error);
+        alert("⚠ Unable to load pose detection. Please check your internet connection or try again later.");
+    }
+};
+
 
     setupCamera();
     loadPoseDetection();
@@ -79,7 +90,45 @@ export default function ProductDetailPage() {
     return () => videoRef.current?.removeEventListener("loadeddata", handleLoadedData);
   }, []);
 
-
+  const handleCapture = () => {
+    if (!videoRef.current) return;
+  
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+  
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  
+    // ✅ Draw only the camera feed (No external image to avoid CORS issues)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+    try {
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/jpeg"); // ✅ No CORS error because it's only the video feed
+      link.download = "camera-screenshot.jpg";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  
+      alert("✅ Screenshot saved successfully!");
+    } catch (error) {
+      console.error("❌ Screenshot failed:", error);
+      alert("⚠ Unable to capture screenshot. Try again.");
+    }
+  };
+        
+  
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject;
+      const tracks = stream.getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOn(false);
+  };
+  
   useEffect(() => {
   if (!canvasRef.current || !videoRef.current || !detector || !videoLoaded) return;
 
@@ -91,67 +140,77 @@ export default function ProductDetailPage() {
   }
 
   const adjustDressSize = async () => {
-    if (!videoRef.current || !canvasRef.current || !detector || !videoLoaded) return;
+    if (!videoRef.current || !canvasRef.current || !detector) return;
   
     const ctx = canvasRef.current.getContext("2d");
-    const gownImage = new Image();
+    const video = videoRef.current;
   
-    if (product?.image_url) {
-      gownImage.src = product.image_url;
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.warn("🚨 Skipping pose detection: Video not fully loaded.");
+      requestAnimationFrame(adjustDressSize);
+      return;
     }
   
-    const video = videoRef.current;
     const { videoWidth, videoHeight } = video;
-  
-    if (videoWidth === 0 || videoHeight === 0) return; // Prevent zero-size textures
-  
     canvasRef.current.width = videoWidth;
     canvasRef.current.height = videoHeight;
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
   
-    const poses = await detector.estimatePoses(video);
-    if (poses.length === 0) return;
+    const gownImage = new Image();
+    gownImage.src = product?.image_url;
   
-    const keypoints = poses[0].keypoints;
+    // **🔥 Default Dress Size Before Detection**
+    let dressWidth = videoWidth * 0.6;
+    const dressHeight = videoHeight * 1.2;
+    let xOffset = (videoWidth - dressWidth) / 2;
+    let yOffset = (videoHeight - dressHeight) * 0.6; // 🔥 Keep at shoulder level
   
-    // ✅ Extract key points
-    const leftShoulder = keypoints.find(k => k.name === "left_shoulder");
-    const rightShoulder = keypoints.find(k => k.name === "right_shoulder");
-    const leftHip = keypoints.find(k => k.name === "left_hip");
-    const rightHip = keypoints.find(k => k.name === "right_hip");
-    const leftWaist = keypoints.find(k => k.name === "left_hip");  // Approximate waist
-    const rightWaist = keypoints.find(k => k.name === "right_hip"); // Approximate waist
+    gownImage.onload = () => {
+      ctx.drawImage(gownImage, xOffset, yOffset, dressWidth, dressHeight);
+    };
   
-    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip || !leftWaist || !rightWaist) return;
+    try {
+      const poses = await detector.estimatePoses(video, { flipHorizontal: false });
   
-    // ✅ Calculate dynamic widths and height
-    const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x);
-    const waistWidth = Math.abs(rightWaist.x - leftWaist.x);
-    const bodyHeight = Math.abs(rightHip.y - leftShoulder.y);
+      if (poses.length === 0) {
+        console.warn("⚠ No person detected. Dress stays centered.");
+        requestAnimationFrame(adjustDressSize);
+        return;
+      }
   
-    // ✅ Adjust dress size using both shoulder & waist width
-    const dressWidth = Math.max(shoulderWidth * 2.5, waistWidth * 3.0, videoWidth * 0.9);
-    const dressHeight = bodyHeight * 1.8; // Extend dress height
+      const keypoints = poses[0].keypoints;
+      const leftShoulder = keypoints.find(k => k.name === "left_shoulder");
+      const rightShoulder = keypoints.find(k => k.name === "right_shoulder");
+      const leftHip = keypoints.find(k => k.name === "left_hip");
   
-    // ✅ Leave Space at the Top
-    const centerX = videoWidth / 2; // Center horizontally
-    const topSpace = videoHeight * 0.15; // 15% space from the top
-    const yPos = topSpace; // Move dress down to fit properly
+      if (!leftShoulder || !rightShoulder || !leftHip) {
+        console.warn("⚠ Missing key points! Keeping dress at default.");
+        requestAnimationFrame(adjustDressSize);
+        return;
+      }
   
-    // ✅ Draw the dynamically resized dress
-    if (gownImage.complete) {
-      ctx.drawImage(
-        gownImage,
-        centerX - dressWidth / 2, // Center horizontally
-        yPos,
-        dressWidth,
-        dressHeight
-      );
+      // ✅ **Get Chest Width (Shoulder Distance)**
+      const chestWidth = Math.abs(rightShoulder.x - leftShoulder.x);
+  
+      // 🔥 **Increase Shoulder Width Scaling Factor**
+      const shoulderWidthScale = 12
+      dressWidth = chestWidth * shoulderWidthScale;
+  
+      // ✅ **Position Dress at Shoulder Level**
+     // ✅ Move the dress slightly to the right
+    xOffset = (leftShoulder.x + rightShoulder.x) / 2 - dressWidth / 2 + 10; // 🔥 Increase `+10` for right shift
+
+      yOffset = leftShoulder.y - (dressHeight * 0.01);
+  
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.drawImage(gownImage, xOffset, yOffset, dressWidth, dressHeight);
+  
+      requestAnimationFrame(adjustDressSize);
+    } catch (error) {
+      console.error("❌ Pose detection error:", error);
+      requestAnimationFrame(adjustDressSize);
     }
-  
-    requestAnimationFrame(adjustDressSize); // ✅ Keep updating in real-time
   };
-    
   
 
   adjustDressSize();
@@ -185,63 +244,87 @@ useEffect(() => {
   }
 }, [isCameraOn]);
 
-  // ✅ Fetch product details by ID
-  useEffect(() => {
-    if (id) {
-      axios
-        .get(`http://127.0.0.1:8000/api/products/${id}`)
-        .then((response) => {
-          setProduct(response.data);
-        })
-        .catch((error) => {
-          console.error("Error fetching product:", error);
-        });
-    }
-  }, [id]);
+useEffect(() => {
+  if (id) {
+    const fetchProduct = async () => {
+      try {
+        const response = await axios.get(`http://127.0.0.1:8000/api/products/${id}`);
+        setProduct(response.data);
+      } catch (error) {
+        console.error("❌ Error fetching product:", error);
 
- // ✅ Fetch user's favorite items
+        // ✅ Show alert instead of crashing with a runtime error
+        if (!error.response) {
+          alert("⚠ Network Error! Unable to fetch product details. Please check your internet connection.");
+        } else {
+          alert(`⚠ Error: ${error.response?.data?.message || "Something went wrong."}`);
+        }
+      }
+    };
+
+    fetchProduct();
+  }
+}, [id]);
+
+
 useEffect(() => {
   const fetchFavorites = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return; // ✅ Skip if user isn't logged in
+    const token = localStorage.getItem("token");
+    if (!token) return; // ✅ Skip if user isn't logged in
 
-      try {
-          const response = await axios.get("http://127.0.0.1:8000/api/favorites", {
-              headers: { Authorization: `Bearer ${token}` },
-          });
+    try {
+      const response = await axios.get("http://127.0.0.1:8000/api/favorites", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-          if (response.data.success) {
-              setFavorites(response.data.data.map((item) => item.product_id)); // ✅ Now setFavorites is defined
-          }
-      } catch (error) {
-          console.error("Error fetching favorites:", error);
+      if (response.data.success) {
+        setFavorites(response.data.data.map((item) => item.product_id)); // ✅ Now setFavorites is defined
       }
+    } catch (error) {
+      console.error("Error fetching favorites:", error);
+
+      // ✅ Handle Network Errors
+      if (!error.response) {
+        alert("⚠ Network error! Unable to fetch favorites. Please check your connection.");
+      } else {
+        alert(`⚠ Error: ${error.response?.data?.message || "Something went wrong."}`);
+      }
+    }
   };
 
   fetchFavorites();
-}, [setFavorites]); // ✅ Include setFavorites as a dependency
+}, [setFavorites]);
 
-// ✅ Fetch wishlist items
+
 useEffect(() => {
   const fetchWishlist = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return; // ✅ Skip if not logged in
+    const token = localStorage.getItem("token");
+    if (!token) return; // ✅ Skip if not logged in
 
-      try {
-          const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
-              headers: { Authorization: `Bearer ${token}` },
-          });
+    try {
+      const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-          if (response.data.success) {
-              setWishlist(response.data.data.map((item) => item.product_id)); // ✅ Now setWishlist is defined
-          }
-      } catch (error) {
-          console.error("Error fetching wishlist:", error);
+      if (response.data?.success) {
+        setWishlist(response.data.data.map((item) => item.product_id)); // ✅ Now setWishlist is defined
       }
+    } catch (error) {
+      console.error("❌ Error fetching wishlist:", error);
+
+      // ✅ Handle Network Error Gracefully
+      if (!error.response) {
+        alert("⚠ Network error! Unable to load wishlist. Please check your internet connection.");
+      } else {
+        alert(`⚠ Error fetching wishlist: ${error.response?.data?.message || "Unexpected error occurred."}`);
+      }
+    }
   };
 
-  fetchWishlist();
-}, [setWishlist]); // ✅ Include setWishlist as a dependency
+  fetchWishlist().catch(err => console.error("❌ Unhandled fetchWishlist error:", err)); // ✅ Ensure no unhandled rejections
+}, [setWishlist]);
+
+
 
 
   // ✅ Add product to wishlist
@@ -321,27 +404,31 @@ useEffect(() => {
     }
   };
 
-  const calculatePrice = (productPrice, startDate, endDate) => {
-    if (!startDate || !endDate) return { totalPrice: productPrice, addedPrice: 0 };
-  
+  const calculatePrice = (productPrice, discountedPrice, startDate, endDate) => {
+    if (!startDate || !endDate) return { totalPrice: discountedPrice || productPrice, addedPrice: 0 };
+
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-  
+
     let addedPrice = 0;
     if (diffDays >= 4 && diffDays <= 6) {
-      addedPrice = 980.0;
+        addedPrice = 980.0;
     } else if (diffDays === 7) {
-      addedPrice = 1000.0;
+        addedPrice = 1000.0;
     } else if (diffDays > 7) {
-      addedPrice = 1000.0 + (diffDays - 7) * 50;
+        addedPrice = 1000.0 + (diffDays - 7) * 50;
     }
-  
+
+    // ✅ Use discounted price if available, otherwise use regular price
+    const basePrice = discountedPrice || productPrice;
+
     return {
-      totalPrice: productPrice + addedPrice,
-      addedPrice: addedPrice,
+        totalPrice: basePrice + addedPrice, // ✅ Ensure addedPrice is included
+        addedPrice: addedPrice,
     };
-  };
+};
+
 
   const handleDateChange = (type, value) => {
     setRentalDetails((prev) => {
@@ -369,95 +456,91 @@ useEffect(() => {
   
   
   useEffect(() => {
-    if (rentalDetails.startDate && rentalDetails.endDate) {
-      const { totalPrice, addedPrice } = calculatePrice(
-        Number(product?.price),
-        rentalDetails.startDate,
-        rentalDetails.endDate
-      );
-      setRentalDetails((prev) => ({
-        ...prev,
-        totalPrice: totalPrice,
-        addedPrice: addedPrice,
-      }));
-    }
-  }, [rentalDetails.startDate, rentalDetails.endDate, product?.price]);
-  
-  const handleBooking = async () => {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-        alert("⚠ You must be logged in to book.");
-        return;
-    }
-
-    if (!rentalDetails.startDate || !rentalDetails.endDate) {
-        alert("⚠ Please select both a Start Date and an End Date before booking.");
-        return;
-    }
-
-    const confirmBooking = window.confirm("✅ Booking saved! Waiting for approval.");
-    if (!confirmBooking) return;
-
-    try {
-        setIsBooking(true);
-
-        // ✅ Convert date to `YYYY-MM-DD` before sending
-        const formattedStartDate = new Date(rentalDetails.startDate).toISOString().split("T")[0];
-        const formattedEndDate = new Date(rentalDetails.endDate).toISOString().split("T")[0];
-
-        const response = await axios.post(
-          "http://127.0.0.1:8000/api/bookings",
-          {
-              product_id: product.id,
-              start_date: formattedStartDate, // ✅ Fixed format
-              end_date: formattedEndDate, // ✅ Fixed format
-              added_price: rentalDetails.addedPrice,
-              total_price: rentalDetails.totalPrice,
-          },
-          {
-              headers: { Authorization: `Bearer ${token}` },
-          }
+    if (rentalDetails.startDate && rentalDetails.endDate && product) {
+        const { totalPrice, addedPrice } = calculatePrice(
+            Number(product?.price),
+            Number(product?.discounted_price), // ✅ Use discounted price if available
+            rentalDetails.startDate,
+            rentalDetails.endDate
         );
 
-        if (response.data.success) {
-            const refNumber = response.data.booking.reference_number;
-
-            setTimeout(() => {
-                setIsBooking(false);
-                router.push(`/book?ref=${refNumber}`);
-            }, 1500);
-        } else {
-            alert("❌ Failed to book. Please try again.");
-            setIsBooking(false);
-        }
-    } catch (error) {
-        console.error("Error booking:", error);
-        alert(error.response?.data?.message || "❌ An error occurred.");
-        setIsBooking(false);
+        setRentalDetails((prev) => ({
+            ...prev,
+            totalPrice: totalPrice + addedPrice, // ✅ Ensure addedPrice is added to total price
+            addedPrice: addedPrice, // ✅ Ensure addedPrice updates properly
+        }));
     }
+}, [rentalDetails.startDate, rentalDetails.endDate, product]);
+
+const handleBooking = async () => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    alert("⚠ You must be logged in to book.");
+    return;
+  }
+
+  if (!rentalDetails.startDate || !rentalDetails.endDate) {
+    alert("⚠ Please select both a Start Date and an End Date before booking.");
+    return;
+  }
+
+  const confirmBooking = window.confirm("✅ Booking saved! Waiting for approval.");
+  if (!confirmBooking) return;
+
+  try {
+    setIsBooking(true);
+    const response = await axios.post("http://127.0.0.1:8000/api/bookings", {
+      product_id: product.id,
+      start_date: rentalDetails.startDate,
+      end_date: rentalDetails.endDate,
+      total_price: rentalDetails.totalPrice,
+    }, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.data.success) {
+      alert("✅ Booking successful!");
+    } else {
+      alert("❌ Booking failed!");
+    }
+  } catch (error) {
+    console.error("Error booking:", error);
+
+    // ✅ Handle Network Error Gracefully
+    if (!error.response) {
+      alert("⚠ Network Error! Unable to process your booking. Please check your internet connection.");
+    } else {
+      alert(`⚠ Booking Error: ${error.response?.data?.message || "Something went wrong."}`);
+    }
+  } finally {
+    setIsBooking(false);
+  }
 };
 
 
-  
-  useEffect(() => {
-    if (id) {
-        axios.get(`http://127.0.0.1:8000/api/products/${id}`)
-            .then((response) => {
-                if (response.data.success) {
-                    setProduct(response.data.product);
-                    setRentalDetails((prev) => ({
-                        ...prev,
-                        startDate: response.data.product.start_date,
-                        endDate: response.data.product.end_date,
-                    }));
-                }
-            })
-            .catch((error) => {
-                console.error("Error fetching product:", error);
-            });
-    }
+
+useEffect(() => {
+  if (id) {
+      axios.get(`http://127.0.0.1:8000/api/products/${id}`)
+          .then((response) => {
+              console.log("📡 API Response:", response.data); // ✅ Debug API Response
+              
+              if (response.data.success) {
+                  setProduct(response.data.product);
+                  setRentalDetails((prev) => ({
+                      ...prev,
+                      startDate: response.data.product.start_date,
+                      endDate: response.data.product.end_date,
+                  }));
+              }
+          })
+          .catch((error) => {
+              console.error("❌ Error fetching product:", error);
+          });
+  }
 }, [id]);
+
 
 const isDateAvailable = (date, isStartDate = true) => {
   if (!product?.start_date || !product?.end_date) return false;
@@ -514,12 +597,23 @@ const isDateAvailable = (date, isStartDate = true) => {
     <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none" />
   </div>
 
-  {/* ✅ Start Camera Button */}
-  {!isCameraOn && (
-    <button onClick={startCamera} className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg">
-      Start Camera
+  <div className="flex gap-3 mt-4">
+  {!isCameraOn ? (
+    <button onClick={startCamera} className="px-6 py-3 bg-pink-600 text-white rounded-lg flex items-center gap-2">
+      <FaCamera /> Start Camera
     </button>
+  ) : (
+    <>
+      <button onClick={handleCapture} className="px-6 py-3 bg-green-600 text-white rounded-lg flex items-center gap-2">
+        <FaCamera /> Capture
+      </button>
+      <button onClick={stopCamera} className="px-6 py-3 bg-red-600 text-white rounded-lg flex items-center gap-2">
+        <FaTrash /> Stop Camera
+      </button>
+    </>
   )}
+</div>
+
 
   <p className="text-sm text-gray-500 mt-4">
     Stand in front of the camera to see the gown adjust to your body!
@@ -529,13 +623,39 @@ const isDateAvailable = (date, isStartDate = true) => {
 
             {/* Product Info & Calendar */}
             <div className="w-full flex flex-col gap-6">
-              {/* Product Name, Price & Description */}
+             {/* Product Name, Price & Description */}
               <div className="space-y-4">
-                <h1 className="text-4xl font-bold">{product.name}</h1>
-                <p className="text-2xl font-semibold text-pink-600">₱{Number(product.price).toLocaleString()}</p>
-                <p className="text-lg text-gray-600">{product.category}</p>
-                <p className="text-lg text-gray-600">{product.description}</p>
+                  <h1 className="text-4xl font-bold">{product.name}</h1>
+
+                  {/* ✅ Check if there's a discount */}
+                  {product.discounted_price && product.discounted_price !== null && product.discounted_price !== "null" ? (
+                      <div className="flex flex-col">
+                          <p className="text-2xl font-semibold text-red-500 line-through">
+                              ₱{Number(product.price).toLocaleString()} {/* Original Price with strikethrough */}
+                          </p>
+
+                          <p className="text-lg font-semibold text-green-600">
+                              {/* 🔥 Show discount percentage */}
+                              ({Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF)
+                          </p>
+
+                          <p className="text-3xl font-bold text-pink-600">
+                              ₱{Number(product.discounted_price).toLocaleString()} {/* ✅ New discounted price */}
+                          </p>
+                      </div>
+                  ) : (
+                      // ✅ Show regular price if no discount
+                      <p className="text-2xl font-semibold text-pink-600">
+                          ₱{Number(product.price).toLocaleString()}
+                      </p>
+                  )}
+
+                  <p className="text-lg text-gray-600">{product.category}</p>
+                  <p className="text-lg text-gray-600">Stock: {product.stock}</p>
+                  <p className="text-lg text-gray-600">{product.description}</p>
               </div>
+
+
   
               <div className="flex space-x-4">
                   {/* Wishlist Button */}
@@ -556,89 +676,125 @@ const isDateAvailable = (date, isStartDate = true) => {
                   </button>
 
                 </div>
+{/* Rental Date Selection & Pricing */}
+<div className="bg-white shadow-lg rounded-lg p-6">
+  {/* Instructional Text */}
+  <p className="text-sm text-gray-600 text-center mb-4">
+    <strong>Rental Pricing:</strong> Base price applies for up to 3 days.
+    <br />
+    Additional ₱980 for rentals between 4-6 days.
+    <br />
+    7 days rental costs an extra ₱1,000.
+    <br />
+    For rentals longer than 7 days, an extra ₱50 is charged per additional day.
+  </p>
 
-  
-              {/* Rental Date Selection & Pricing */}
-              <div className="bg-white shadow-lg rounded-lg p-6">
-                 {/* Instructional Text */}
-                  <p className="text-sm text-gray-600 text-center mb-4">
-                  <strong>Rental Pricing:</strong> Base price applies for up to 3 days.
-                    <br />
-                    Additional ₱980 for rentals between 4-6 days.
-                    <br />
-                    7 days rental costs an extra ₱1,000.
-                    <br />
-                    For rentals longer than 7 days, an extra ₱50 is charged per additional day.
-                  </p>
-                <h3 className="text-lg font-semibold text-gray-800 text-center">Select Rental Dates</h3>
-  
-                {/* Start Date Selection */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700">Start Date (Pick-Up)</label>
-                  <div className="flex justify-center">
-                {/* ✅ Start Date Calendar */}
-                <Calendar
-                  value={rentalDetails.startDate ? new Date(rentalDetails.startDate) : null}
-                  onChange={(date) => handleDateChange("startDate", date)}
-                  className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 mt-2"
-                  tileDisabled={({ date }) => !isDateAvailable(date, true)}
-                  tileClassName={({ date }) =>
-                    isDateAvailable(date, true)
-                      ? rentalDetails.startDate &&
-                        new Date(rentalDetails.startDate).toDateString() === date.toDateString()
-                        ? "react-calendar__tile--active" // ✅ Highlight selected start date
-                        : "available-date" // ✅ Show green available dates
-                      : "react-calendar__tile--disabled" // ✅ Show disabled dates
-                  }
-                />
+  <h3 className="text-lg font-semibold text-gray-800 text-center mb-4">
+    Select Rental Dates
+  </h3>
 
-                  </div>
-                </div>
+  {/* ✅ Start & End Date Calendars with Equal Heights */}
+  <div className="flex flex-col md:flex-row gap-4 justify-center">
+    {/* Start Date Selection */}
+    <div className="flex flex-col items-center w-full">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Start Date (Pick-Up)
+      </label>
+      <div className="h-[350px] flex items-center"> {/* Forces equal height */}
+        <Calendar
+          value={rentalDetails.startDate ? new Date(rentalDetails.startDate) : null}
+          onChange={(date) => handleDateChange("startDate", date)}
+          className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 h-full"
+          tileDisabled={({ date }) => !isDateAvailable(date, true)}
+          tileClassName={({ date }) =>
+            isDateAvailable(date, true)
+              ? rentalDetails.startDate &&
+                new Date(rentalDetails.startDate).toDateString() === date.toDateString()
+                ? "react-calendar__tile--active"
+                : "available-date"
+              : "react-calendar__tile--disabled"
+          }
+        />
+      </div>
+    </div>
+
+    {/* End Date Selection */}
+    <div className="flex flex-col items-center w-full">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        End Date (Return Due)
+      </label>
+      <div className="h-[350px] flex items-center"> {/* Forces equal height */}
+        <Calendar
+          value={rentalDetails.endDate ? new Date(rentalDetails.endDate) : null}
+          onChange={(date) => handleDateChange("endDate", date)}
+          className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 h-full"
+          tileDisabled={({ date }) => !isDateAvailable(date, false)}
+          tileClassName={({ date }) =>
+            isDateAvailable(date, false)
+              ? rentalDetails.endDate &&
+                new Date(rentalDetails.endDate).toDateString() === date.toDateString()
+                ? "react-calendar__tile--active"
+                : "available-date"
+              : "react-calendar__tile--disabled"
+          }
+        />
+      </div>
+    </div>
+  </div>
+
+  {/* Price Calculation */}
+  <div className="mt-6 text-center">
+    <p className="text-sm font-semibold text-gray-700">
+      Added Rental Price: <span className="text-pink-600">
+        ₱{Number(rentalDetails.addedPrice || 0).toFixed(2)}
+      </span>
+    </p>
+    <p className="mt-2 text-xl font-semibold text-gray-800">
+    Final Total Price: 
+    <span className="text-pink-600">
+        ₱{Number(
+            (product.discounted_price && product.discounted_price !== "null" 
+                ? Number(product.discounted_price) // ✅ Ensure it's a number
+                : Number(product.price)) 
+            + (rentalDetails.addedPrice || 0) // ✅ Added Rental Price properly included
+        ).toFixed(2)}
+    </span>
+</p>
+  </div>
   
-                {/* End Date Selection */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700">End Date (Return Due)</label>
-                  <div className="flex justify-center">
-              {/* ✅ End Date Calendar */}
-                    <Calendar
-                      value={rentalDetails.endDate ? new Date(rentalDetails.endDate) : null}
-                      onChange={(date) => handleDateChange("endDate", date)}
-                      className="w-full max-w-xs rounded-lg shadow-sm border-2 border-gray-300 p-2 mt-2"
-                      tileDisabled={({ date }) => !isDateAvailable(date, false)}
-                      tileClassName={({ date }) =>
-                        isDateAvailable(date, false)
-                          ? rentalDetails.endDate &&
-                            new Date(rentalDetails.endDate).toDateString() === date.toDateString()
-                            ? "react-calendar__tile--active" // ✅ Highlight selected end date
-                            : "available-date" // ✅ Show green available dates
-                          : "react-calendar__tile--disabled" // ✅ Show disabled dates
-                      }
-/>
-                  </div>
-                </div>
-  
-                {/* Price Calculation */}
-                <div className="mt-6 text-center">
-                  <p className="text-sm font-semibold text-gray-700">
-                    Added Rental Price: <span className="text-pink-600">₱{(Number(rentalDetails.addedPrice || 0).toFixed(2))}</span>
-                  </p>
-                  <p className="mt-2 text-xl font-semibold text-gray-800">
-                    Final Total Price: <span className="text-pink-600">₱{(Number(rentalDetails.totalPrice || product?.price || 0).toFixed(2))}</span>
-                  </p>
-                </div>
-  
-                {/* Booking Button */}
-                <button 
+              {/* Booking Button */}
+                {product.stock > 0 ? (
+                  <button 
                   onClick={handleBooking}
-                  className={`mt-6 w-full px-6 py-3 rounded-full transition ${
-                      isBooking ? "bg-gray-400 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700"
-                  } text-white`}
+                  className={`mt-6 w-full px-6 py-3 rounded-full transition flex items-center justify-center gap-2
+                      ${isBooking ? "bg-gray-400 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700"}
+                      text-white`}
                   disabled={isBooking}
               >
-                  {isBooking ? "Booking..." : "Book Now"}
+                  {isBooking ? (
+                      <>
+                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                          </svg>
+                          Booking...
+                      </>
+                  ) : (
+                      "Book Now"
+                  )}
               </button>
+
+                ) : (
+                  <p className="mt-6 text-red-600 font-semibold text-lg text-center">
+                    ⚠ This gown is currently out of stock!
+                  </p>
+                )}
+
                 
               </div>
+
+              <ReviewSection productId={product.id} />
+
             </div>
           </div>
         </div>
@@ -646,6 +802,7 @@ const isDateAvailable = (date, isStartDate = true) => {
         {/* Footer */}
         <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
+                <ChatWidget />
                 </footer>
       </div>
     </AuthGuard>

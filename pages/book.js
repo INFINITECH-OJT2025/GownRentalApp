@@ -7,6 +7,7 @@ import Navbar from "../components/Navbar";
 import AuthGuard from "../components/AuthGuard";
 import Head from "next/head";
 import AdminPaymentDetails from "../components/AdminPaymentDetails";
+import ChatWidget from "../components/ChatWidget"; 
 
 export default function BookingPage() {
   const [isCanceled, setIsCanceled] = useState(false);
@@ -19,7 +20,11 @@ export default function BookingPage() {
   const [pointsToUse, setPointsToUse] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
   const [user, setUser] = useState(null);
-
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingDiscount, setLoadingDiscount] = useState(false);
+  const [loadingUpload, setLoadingUpload] = useState(false);
+  const [loadingCancel, setLoadingCancel] = useState(false);
+  
   useEffect(() => {
     const fetchUser = async () => {
         const token = localStorage.getItem("token");
@@ -32,14 +37,18 @@ export default function BookingPage() {
 
             if (response.data.user) {
                 setUser(response.data.user);
+            } else {
+                setUser({ loyalty_points: 0 }); // ✅ Set default if user data is missing
             }
         } catch (error) {
             console.error("❌ Error fetching user details:", error);
+            setUser({ loyalty_points: 0 }); // ✅ Prevent `null` errors
         }
     };
 
     fetchUser();
 }, []);
+
 
 
   useEffect(() => {
@@ -51,122 +60,161 @@ export default function BookingPage() {
     const fetchBooking = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
-        alert("⚠ You must be logged in.");
-        router.replace("/login");
-        return;
+          alert("⚠ You must be logged in.");
+          router.replace("/login");
+          return;
       }
-    
+  
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/bookings/${ref}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-    
-        if (response.data.success) {
-          setBooking(response.data.booking);
-          setFinalPrice(response.data.booking.total_price); // ✅ Update price with discount
-          setPointsToUse(response.data.booking.voucher_fee || 0); // ✅ Fetch used voucher fee
-        } else {
-          alert("❌ Booking not found.");
-          router.replace("/products");
-        }
+          const response = await axios.get(`http://127.0.0.1:8000/api/bookings/${ref}`, {
+              headers: { Authorization: `Bearer ${token}` },
+          });
+  
+          if (response.data.success) {
+              const bookingData = response.data.booking;
+  
+              console.log("Fetched Booking Data:", bookingData); // ✅ Debugging
+  
+              const discountedPrice = Number(bookingData.discounted_price) || Number(bookingData.total_price) || 0;
+              const addedPrice = Number(bookingData.added_price) || 0;
+              const voucherFee = Number(bookingData.voucher_fee) || 0;
+  
+              const calculatedFinalPrice = Math.max(0, discountedPrice + addedPrice - voucherFee);
+  
+              setBooking(bookingData);
+              setFinalPrice(calculatedFinalPrice); // ✅ Always store as a number
+              setPointsToUse(voucherFee);
+          } else {
+              alert("❌ Booking not found.");
+              router.replace("/products");
+          }
       } catch (error) {
-        console.error("❌ Error fetching booking:", error);
-        alert("❌ An error occurred while fetching the booking.");
-        router.replace("/products");
+          console.error("❌ Error fetching booking:", error);
+          alert("❌ An error occurred while fetching the booking.");
+          router.replace("/products");
       }
-    };
-    
-
+  };
+  
+  
     fetchBooking();
   }, [ref, router]);
 
   const handleFileChange = (event) => {
-    setGcashReceipt(event.target.files[0]);
-  };
+    const file = event.target.files[0];
+    if (!file) return;
 
-  const handleUpload = async () => {
-    if (!gcashReceipt) {
-        alert("⚠ Please select a receipt image to upload.");
+    // ✅ Allowed file types (NO .webp)
+    const allowedExtensions = ["jpg", "jpeg", "png"];
+    const fileExtension = file.name.split(".").pop().toLowerCase();
+
+    if (!allowedExtensions.includes(fileExtension)) {
+        alert("⚠ Invalid file type! Please upload a JPG, JPEG, or PNG image.");
         return;
     }
 
-    // ✅ Check file size before uploading (2MB limit)
+    // ✅ Check file size (Max: 2MB)
     const maxSize = 2 * 1024 * 1024; // 2MB in bytes
-    if (gcashReceipt.size > maxSize) {
-        window.alert("⚠ File is too large! Please upload an image smaller than 2MB.");
+    if (file.size > maxSize) {
+        alert("⚠ File is too large! Please upload an image smaller than 2MB.");
         return;
     }
 
-    if (!booking?.id) {
-        alert("❌ Booking ID is missing!");
-        return;
-    }
-
-    setUploading(true);
-    const formData = new FormData();
-    formData.append("receipt", gcashReceipt);
-    formData.append("booking_id", booking.id); // ✅ Ensure booking_id is included
-
-    try {
-        const token = localStorage.getItem("token");
-        const response = await axios.post(
-            "http://127.0.0.1:8000/api/bookings/upload-receipt",
-            formData,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "multipart/form-data",
-                },
-            }
-        );
-
-        if (response.data.success) {
-            alert("✅ Receipt uploaded successfully!");
-      
-            // ✅ Fetch user's loyalty points after receipt upload
-            const userResponse = await axios.get("http://127.0.0.1:8000/api/user", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            setLoyaltyPoints(userResponse.data.user.loyalty_points);
-            setFinalPrice(booking.total_price);
-
-            // ✅ Redirect to booking history after successful upload
-            setTimeout(() => {
-                router.push("/bookhistory");
-            }, 1000);
-        } else {
-            alert(response.data.message || "❌ Failed to upload receipt.");
-        }
-
-    } catch (error) {
-        console.error("Error uploading receipt:", error);
-
-        if (error.response?.status === 422) {
-            window.alert("⚠ Upload failed! Ensure your receipt is an image (jpg, png) and is within 2MB.");
-            console.error("Validation Errors:", error.response.data.errors);
-        } else {
-            alert(error.response?.data?.message || "❌ An error occurred while uploading.");
-        }
-    } finally {
-        setUploading(false);
-    }
+    setGcashReceipt(file);
 };
 
+
+const handleUpload = async () => {
+  if (!gcashReceipt) {
+      alert("⚠ Please select a receipt image to upload.");
+      return;
+  }
+
+  // ✅ Validate file type & size
+  const allowedExtensions = ["jpg", "jpeg", "png"];
+  const fileExtension = gcashReceipt.name.split(".").pop().toLowerCase();
+  if (!allowedExtensions.includes(fileExtension)) {
+      alert("⚠ Invalid file type! Please upload a JPG, JPEG, or PNG image.");
+      return;
+  }
+  if (gcashReceipt.size > 2 * 1024 * 1024) {
+      alert("⚠ File is too large! Please upload an image smaller than 2MB.");
+      return;
+  }
+
+  if (!booking?.id) {
+      alert("❌ Booking ID is missing!");
+      return;
+  }
+
+  setUploading(true);
+  const formData = new FormData();
+  formData.append("receipt", gcashReceipt);
+  formData.append("booking_id", booking.id); 
+
+  try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+          "http://127.0.0.1:8000/api/bookings/upload-receipt",
+          formData,
+          {
+              headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "multipart/form-data",
+              },
+          }
+      );
+
+      if (response.data.success) {
+          alert("✅ Receipt uploaded successfully!");
+          setTimeout(() => {
+              router.push("/bookhistory");
+          }, 1000);
+      } else {
+          alert(response.data.message || "❌ Failed to upload receipt.");
+      }
+
+  } catch (error) {
+      console.error("❌ Error uploading receipt:", error);
+
+      if (error.response) {
+          console.error("⚠ Backend Response:", error.response.data);
+
+          if (error.response.status === 422) {
+              alert("⚠ Upload failed! Ensure the receipt is a valid JPG, JPEG, or PNG image.");
+              console.error("Validation Errors:", error.response.data.errors);
+          } else {
+              alert(`❌ Server Error: ${error.response.data.message || "Unexpected error occurred."}`);
+          }
+      } else {
+          alert("❌ Network Error! Please check your internet connection.");
+      }
+  } finally {
+      setUploading(false);
+  }
+};
 
 const handlePointsChange = (event) => {
   let value = parseInt(event.target.value, 10) || 0;
 
   if (value > user.loyalty_points) {
-    alert("❌ You cannot use more points than you have!");
-    value = user.loyalty_points;
+      alert("❌ You cannot use more points than you have!");
+      value = user.loyalty_points;
   } else if (value < 0) {
-    value = 0;
+      value = 0;
   }
 
   setPointsToUse(value);
-  setFinalPrice(booking.total_price - value); // Deduct points from total price
+
+  // ✅ Ensure added rental price is included
+  const discountedTotal = (Number(booking?.discounted_price) || Number(booking?.total_price) || 0) + 
+                          (Number(booking?.added_price) || 0);
+  
+  const newPrice = Math.max(0, discountedTotal - value);
+
+  setFinalPrice(Number(newPrice.toFixed(2))); // ✅ Ensure proper number format
 };
+
+
 
 const applyDiscount = async () => {
   if (pointsToUse <= 0) {
@@ -195,11 +243,10 @@ const applyDiscount = async () => {
     if (response.data.success) {
       alert(`✅ Discount of ₱${pointsToUse} applied! New price: ₱${response.data.new_total_price}`);
 
-      // ✅ Update UI (Deduct loyalty points properly)
-      setFinalPrice(response.data.new_total_price);
+      // ✅ Deduct points properly
       setUser((prevUser) => ({
         ...prevUser,
-        loyalty_points: response.data.remaining_points, // ✅ Update user's points after deduction
+        loyalty_points: prevUser.loyalty_points - pointsToUse, // ✅ Deduct points correctly
       }));
 
       // ✅ Update `voucher_fee` in Booking
@@ -208,6 +255,8 @@ const applyDiscount = async () => {
         voucher_fee: pointsToUse, // ✅ Save voucher fee in state
       }));
 
+      // ✅ Update final price correctly
+      setFinalPrice(response.data.new_total_price);
     } else {
       alert(response.data.message || "❌ Failed to apply discount.");
     }
@@ -269,81 +318,136 @@ const applyDiscount = async () => {
                     )}
                 </p>
               {/* ✅ Message when user refreshes the page */}
-              <p className="mt-3 text-gray-600">
-                  NOTE: If you refreshed the page, your booking is already saved in your booking history. 
-                  You can continue uploading the receipt there.
+              <p className="text-red-600 font-semibold mt-3"> 
+              ⚠ NOTE: If you refreshed the page, your booking is already saved in your booking history. 
+                  You can continue uploading the payment receipt there.
               </p>
 
               {/* ✅ Button to go to Booking History */}
               <button
-                  onClick={() => router.push("/bookhistory")}
-                  className="mt-4 px-6 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 transition"
-              >
-                  📜 View Booking History
-              </button>
+                onClick={() => {
+                    setLoadingHistory(true);
+                    router.push("/bookhistory");
+                }}
+                className={`mt-4 px-6 py-2 rounded-md transition ${loadingHistory ? "bg-gray-500 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700 text-white"}`}
+                disabled={loadingHistory}
+            >
+                {loadingHistory ? "Loading..." : "📜 View Booking History"}
+            </button>
+
             </section>
 
           {/* Booking Details */}
-          <section className="bg-white shadow-lg rounded-lg p-6 text-center mt-6 w-full max-w-lg border-4 border-pink-300">
-              <h2 className="text-2xl font-semibold text-pink-700">Booking Details</h2>
-              <div className="mt-4 text-lg">
-                  <p><strong>Reference Number:</strong> {booking.reference_number}</p>
-                  <p><strong>Product:</strong> {booking.product.name}</p>
-                  <p><strong>Start Date:</strong> {booking.start_date}</p>
-                  <p><strong>End Date:</strong> {booking.end_date}</p>
-                  <p><strong>Added Rental Price:</strong> <span className="text-pink-600">₱{Number(booking.added_price).toFixed(2)}</span></p>
-                  <p><strong>Total Price:</strong> <span className="text-pink-600">₱{Number(booking.total_price).toFixed(2)}</span></p>
-                  {booking.voucher_fee > 0 && (
-                      <p><strong>Voucher Fee (Used Points):</strong> <span className="text-green-600">-₱{Number(booking.voucher_fee).toFixed(2)}</span></p>
-                  )}
-              </div>
-          </section>
-
-                {/* Loyalty Points Discount Section (Now Below Booking Details) */}
-                  <div className="mt-6 p-4 border rounded-lg bg-pink-100">
-                    <h3 className="text-xl font-semibold text-pink-900">Use Your Loyalty Points</h3>
-                    <p className="text-gray-700">
-                      You have <strong>{user.loyalty_points}</strong> loyalty points available.
+            <section className="bg-white shadow-lg rounded-lg p-6 text-center mt-6 w-full max-w-lg border-4 border-pink-300">
+                <h2 className="text-2xl font-semibold text-pink-700">Booking Details</h2>
+                <div className="mt-4 text-lg">
+                    <p><strong>Reference Number:</strong> {booking.reference_number}</p>
+                    <p><strong>Product:</strong> {booking.product.name}</p>
+                    <p><strong>Start Date:</strong> {booking.start_date}</p>
+                    <p><strong>End Date:</strong> {booking.end_date}</p>
+                   {/* ✅ Show Discounted Price from Bookings Table */}
+                    <p><strong>Original Price:</strong> 
+                      <span className="text-red-500 line-through">₱{Number(booking.total_price).toFixed(2)}</span>
                     </p>
+                    <p><strong>Discounted Price:</strong> 
+                      <span className="text-green-600">
+                          ₱{isNaN(booking?.discounted_price) ? "0.00" : Number(booking.discounted_price).toFixed(2)}
+                      </span>
+                  </p>
+                  <p><strong>Added Rental Price:</strong> <span className="text-pink-600">₱{Number(booking.added_price).toFixed(2)}</span></p>
 
-                    {/* Input for Loyalty Points */}
-                    <label className="block mt-4">Enter Points to Use:</label>
-                    <input
-                      type="number"
-                      className="border p-2 rounded-md w-full mt-1"
-                      value={pointsToUse}
-                      onChange={handlePointsChange}
-                    />
+                  <p><strong>Final Price:</strong> 
+                    <span className="text-pink-600">
+                        ₱{!finalPrice || isNaN(finalPrice) ? "0.00" : Number(finalPrice).toFixed(2)}
+                    </span>
+                </p>
 
-                    <p className="text-gray-700 mt-2">New Total Price: <strong>₱{finalPrice}</strong></p>
+                </div>
+            </section>
 
-                    {/* Apply Discount Button */}
-                    <button
-                      onClick={applyDiscount}
-                      className="mt-4 px-6 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 w-full"
+
+
+                {/* Loyalty Points Discount Section */}
+          <div className="mt-6 p-4 border rounded-lg bg-pink-100">
+              <h3 className="text-xl font-semibold text-pink-900">Use Your Loyalty Points</h3>
+              
+              {user ? ( // ✅ Check if user exists before accessing loyalty_points
+                  <>
+                      <p className="text-gray-700">
+                          You have <strong>{user.loyalty_points}</strong> loyalty points available.
+                      </p>
+
+                      {/* Input for Loyalty Points */}
+                      <label className="block mt-4">Enter Points to Use:</label>
+                      <input
+                          type="number"
+                          className="border p-2 rounded-md w-full mt-1"
+                          value={pointsToUse}
+                          onChange={handlePointsChange}
+                      />
+
+                        <p className="text-gray-700 mt-2">
+                          New Total Price: <strong>₱{finalPrice.toFixed(2)}</strong>
+                        </p>
+
+
+                      {/* Apply Discount Button */}
+                      <button
+                        onClick={async () => {
+                            setLoadingDiscount(true);
+                            await applyDiscount();
+                            setLoadingDiscount(false);
+                        }}
+                        className={`mt-4 px-6 py-2 rounded-md w-full transition ${loadingDiscount ? "bg-gray-500 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700 text-white"}`}
+                        disabled={loadingDiscount}
                     >
-                      Apply Discount
+                        {loadingDiscount ? "Applying..." : "Apply Discount"}
                     </button>
 
-                  </div>
 
+                  </>
+              ) : (
+                  <p className="text-gray-600">Loading your loyalty points...</p>
+              )}
+          </div>
 
                 {/* GCash Payment + Upload Receipt + Cancel Booking */}
                 <section className="bg-white shadow-lg rounded-lg p-6 text-center mt-6 w-full max-w-lg border-4 border-pink-300">
                     <AdminPaymentDetails />
 
-                    
+                    {/* NOTE: Please upload your payment receipt here. If you do not upload a receipt, your booking will not be approved by the admin. */}
+                    <p className="text-red-600 font-semibold mt-3">
+                        ⚠ NOTE: Please upload your payment receipt here. If you do not upload a receipt, your booking will not be approved by the admin.
+                    </p>
 
                     {/* Upload Receipt & Cancel Booking */}
                     <div className="mt-6 flex flex-col items-center gap-4">
                         <input type="file" accept="image/*" onChange={handleFileChange} className="border-2 border-pink-400 rounded-md p-2 w-full md:w-1/2"/>
                         
-                        <button onClick={handleUpload} className="px-6 py-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 transition" disabled={uploading}>
-                            {uploading ? "Uploading..." : "Save Receipt"}
-                        </button>
-                        <button onClick={handleCancelBooking} className={`px-6 py-2 rounded-full transition ${isCanceled || booking?.status === "canceled" ? "bg-gray-500 cursor-not-allowed" : "bg-red-500 hover:bg-red-600 text-white"}`} disabled={isCanceled || booking?.status === "canceled"}>
-                            {isCanceled || booking?.status === "canceled" ? "Canceled" : "Cancel Booking"}
-                        </button>
+                        <button
+                        onClick={async () => {
+                            setLoadingUpload(true);
+                            await handleUpload();
+                            setLoadingUpload(false);
+                        }}
+                        className={`px-6 py-2 rounded-full transition ${loadingUpload ? "bg-gray-500 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700 text-white"}`}
+                        disabled={loadingUpload}
+                    >
+                        {loadingUpload ? "Uploading..." : "Save Receipt"}
+                    </button>
+
+                    <button
+                        onClick={async () => {
+                            setLoadingCancel(true);
+                            await handleCancelBooking();
+                            setLoadingCancel(false);
+                        }}
+                        className={`px-6 py-2 rounded-full transition ${loadingCancel || isCanceled || booking?.status === "canceled" ? "bg-gray-500 cursor-not-allowed" : "bg-red-500 hover:bg-red-600 text-white"}`}
+                        disabled={loadingCancel || isCanceled || booking?.status === "canceled"}
+                    >
+                        {loadingCancel ? "Canceling..." : isCanceled || booking?.status === "canceled" ? "Canceled" : "Cancel Booking"}
+                    </button>
+
                     </div>
                 </section>
 
@@ -352,6 +456,7 @@ const applyDiscount = async () => {
             {/* Footer */}
             <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
+            <ChatWidget />
             </footer>
         </div>
     </AuthGuard>

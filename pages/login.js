@@ -4,13 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import axios from "axios";
+import Cookies from "js-cookie";
+
 export default function LoginPage() {
     const router = useRouter();
+    const [rememberMe, setRememberMe] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem("token");
         const user = JSON.parse(localStorage.getItem("user"));
-        
+    
         if (token && user) {
             if (user.role === "admin") {
                 router.push("/admin_pages/admin"); // ✅ Redirect to admin page
@@ -19,6 +22,7 @@ export default function LoginPage() {
             }
         }
     }, [router]);
+    
 
     const [formData, setFormData] = useState({
         email: "",
@@ -32,30 +36,45 @@ export default function LoginPage() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleLogin = async (event) => {
-        event.preventDefault();
-        setLoading(true);
-        setError(null);
+const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
 
-        try {
-            const response = await axios.post("http://127.0.0.1:8000/api/login", formData);
+    try {
+        const response = await axios.post(
+            `${process.env.NEXT_PUBLIC_API_URL}/login`,
+            formData,
+            { headers: { "Content-Type": "application/json" } }
+        );
 
-            // ✅ Store token & user data
+        if (response.data.token) {
+            // ✅ Store token & user role in localStorage
             localStorage.setItem("token", response.data.token);
             localStorage.setItem("user", JSON.stringify(response.data.user));
 
+            // ✅ Store token & user role in Cookies (important for middleware)
+            Cookies.set("auth_token", response.data.token, { expires: 7, secure: true, sameSite: "Strict" });
+            Cookies.set("user_role", response.data.user.role, { expires: 7, secure: true, sameSite: "Strict" });
+
             // ✅ Redirect based on role
             if (response.data.user.role === "admin") {
-                router.push("/admin_pages/admin"); // ✅ Redirect to Admin Dashboard
+                router.push("/admin_pages/admin");
             } else {
-                router.push("/"); // ✅ Redirect to Customer Homepage
+                router.push("/");
             }
-        } catch (err) {
-            setError(err.response?.data?.message || "Invalid email or password.");
-        } finally {
-            setLoading(false);
+        } else {
+            setError("❌ Login failed! Invalid credentials.");
         }
-    };
+    } catch (err) {
+        setError(err.response?.data?.message || "Invalid email or password.");
+        console.error("API Error:", err);
+    } finally {
+        setLoading(false);
+    }
+};
+
+
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-pink-200 to-pink-400 px-6">
@@ -105,10 +124,16 @@ export default function LoginPage() {
                             />
                         </div>
                         <div className="flex justify-between items-center w-full">
-                            <label className="flex items-center text-sm text-gray-600">
-                                <input type="checkbox" className="mr-2" />
-                                Remember Me
-                            </label>
+                        <label className="flex items-center text-sm text-gray-600">
+                        <input 
+                            type="checkbox" 
+                            className="mr-2" 
+                            checked={rememberMe} 
+                            onChange={() => setRememberMe(!rememberMe)} 
+                        />
+                        Remember Me
+                    </label>
+
                             <a href="#" className="text-pink-500 text-sm hover:underline">
                                 Forgot Password?
                             </a>

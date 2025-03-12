@@ -13,20 +13,26 @@ export function FavoritesProvider({ children }) {
         const fetchFavorites = async () => {
             const token = localStorage.getItem("token");
             if (!token) return;
-
+        
             try {
                 const response = await axios.get("http://127.0.0.1:8000/api/favorites", {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-
+        
                 if (response.data.success) {
                     setFavorites(response.data.data.map(item => item.product_id)); // ✅ Store IDs
                 }
             } catch (error) {
-                console.error("Error fetching favorites:", error);
+                if (!error.response) {
+                    alert("⚠ Network Error! Please check your internet connection or refresh the page.");
+                } else if (error.response.status === 401) {
+                    alert("⚠ Unauthorized! Please log in again.");
+                } else {
+                    alert(`⚠ Error fetching favorites: ${error.response.data.message || "Unknown error."}`);
+                }
             }
         };
-
+        
         fetchFavorites();
     }, []);
 

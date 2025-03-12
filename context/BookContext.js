@@ -6,23 +6,27 @@ const BookContext = createContext();
 export function BookProvider({ children }) {
     const [bookingCount, setBookingCount] = useState(0);
 
-    // ✅ Fetch Booking Count from API
     const fetchBookings = async () => {
         const token = localStorage.getItem("token");
         if (!token) return;
-
+    
         try {
             const response = await axios.get("http://127.0.0.1:8000/api/user/bookings", {
                 headers: { Authorization: `Bearer ${token}` },
             });
-
+    
             if (response.data.success) {
-                setBookingCount(response.data.bookings.length); // ✅ Count all bookings for the logged-in user
+                setBookingCount(response.data.bookings.length);
             }
         } catch (error) {
-            console.error("Error fetching bookings:", error);
+            if (!error.response) {
+                alert("⚠ Network Error! Please check your connection.");
+            } else {
+                alert(`⚠ Error fetching bookings: ${error.response.data.message || "Unknown error."}`);
+            }
         }
     };
+    
 
     // ✅ Fetch when component loads
     useEffect(() => {
@@ -39,11 +43,13 @@ export function BookProvider({ children }) {
         return () => window.removeEventListener("storage", handleStorageChange);
     }, []);
 
-    // ✅ Function to Update Booking Count
+    // ✅ **Force Update Booking Count in Real-Time**
     const updateBookingCount = () => {
-        fetchBookings(); // ✅ Refresh from API
-        localStorage.setItem("bookingUpdated", Date.now()); // ✅ Broadcast update to all tabs
-        window.dispatchEvent(new Event("storage")); // ✅ Notify all components
+        fetchBookings(); // ✅ Re-fetch from API
+        setTimeout(() => {
+            localStorage.setItem("bookingUpdated", Date.now()); // ✅ Broadcast update
+            window.dispatchEvent(new Event("storage")); // ✅ Notify other components
+        }, 100); // ✅ Add slight delay to ensure updates propagate
     };
 
     return (

@@ -2,146 +2,232 @@
 
 import { useEffect, useState } from "react";
 import Pusher from "pusher-js";
-import Image from "next/image";
+import { UserCircle } from "lucide-react";
 import AdminSidebar from "../../components/AdminSidebar";
+import Head from "next/head";
 
 export default function ChatPage() {
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState("");
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [darkMode, setDarkMode] = useState(false);
-
-    // Sample User Data
-    const [firstName, setFirstName] = useState("Shekinah");
-    const [lastName, setLastName] = useState("Valdez");
-    const [imagePreview, setImagePreview] = useState("/images/default_avatar.png");
-
-    const [contacts, setContacts] = useState([
-        { id: 1, name: "Alice", avatar: "https://placehold.co/200x/ffa8e4/ffffff.svg?text=A" },
-        { id: 2, name: "Martin", avatar: "https://placehold.co/200x/ad922e/ffffff.svg?text=M" },
-        { id: 3, name: "Charlie", avatar: "https://placehold.co/200x/2e83ad/ffffff.svg?text=C" },
-    ]);
-    const [selectedChat, setSelectedChat] = useState(contacts[0]);
+    const [customers, setCustomers] = useState([]);
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [adminId, setAdminId] = useState(null);
+    const [token, setToken] = useState(null);
 
     useEffect(() => {
-        // Initialize Pusher
-        const pusher = new Pusher("0a411d03b9315833003e", { cluster: "ap1" });
-        const channel = pusher.subscribe("chat-channel");
+        if (typeof window !== "undefined") {
+            const storedToken = localStorage.getItem("token");
 
-        channel.bind("message-sent", (data) => {
-            setMessages((prevMessages) => [...prevMessages, data]);
-        });
+            if (!storedToken) {
+                alert("Error: Missing admin token. Please log in again.");
+                return;
+            }
 
-        return () => {
-            channel.unbind_all();
-            channel.unsubscribe();
-        };
+            setToken(storedToken);
+            fetchAdmin(storedToken);
+        }
     }, []);
 
+    const fetchAdmin = async (storedToken) => {
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/user", {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${storedToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) throw new Error("Failed to fetch admin data");
+
+            const data = await response.json();
+            if (data?.user?.id) {
+                setAdminId(data.user.id);
+                fetchCustomers(storedToken);
+            } else {
+                alert("Error: Unable to retrieve admin data.");
+            }
+        } catch (error) {
+            console.error("Error fetching admin:", error);
+        }
+    };
+
+    const fetchCustomers = async (storedToken) => {
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/customers", {
+                headers: { Authorization: `Bearer ${storedToken}` },
+            });
+
+            if (!response.ok) throw new Error("Failed to fetch customers");
+
+            const data = await response.json();
+            if (data.success) {
+                setCustomers(data.customers);
+                setSelectedCustomer(data.customers[0] || null);
+            }
+        } catch (error) {
+            console.error("Error fetching customers:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedCustomer && adminId) {
+            fetchMessages();
+            initializePusher();
+        }
+    }, [selectedCustomer, adminId]);
+
+    const fetchMessages = async () => {
+        if (!adminId || !selectedCustomer) return;
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/api/messages/customer/${selectedCustomer.id}/${adminId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (!response.ok) throw new Error("Failed to fetch messages");
+
+            const data = await response.json();
+            setMessages(data);
+        } catch (error) {
+            console.error("Error fetching messages:", error);
+        }
+    };
+
     const sendMessage = async () => {
-        if (!message.trim()) return;
+        if (!message.trim() || !selectedCustomer || !adminId) return;
 
         try {
-            await fetch("http://127.0.0.1:8000/api/chat/send", {
+            const response = await fetch("http://127.0.0.1:8000/api/chat/send", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ message, user: selectedChat.name }),
+                body: JSON.stringify({ message, recipient_id: selectedCustomer.id, user_id: adminId }),
             });
 
-            setMessage("");
+            if (response.ok) {
+                const newMessage = await response.json();
+            
+                // Instantly add the sent message to the state
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: newMessage.data.id,
+                        user_id: adminId,  // Ensure admin is sender
+                        receiver_id: selectedCustomer.id,
+                        message: message,
+                    }
+                ]);
+            
+                setMessage("");
+            }
+            
         } catch (error) {
             console.error("Error sending message:", error);
         }
     };
 
+    const initializePusher = () => {
+        if (!adminId || !selectedCustomer) return;
+
+        Pusher.logToConsole = true;
+        
+        const pusher = new Pusher("0a411d03b9315833003e", { 
+            cluster: "ap1", 
+            encrypted: true 
+        });
+
+        const channel = pusher.subscribe(`private-chat-${selectedCustomer.id}-${adminId}`);
+
+        channel.bind("message-sent", (data) => {
+            setMessages((prevMessages) => {
+                // Avoid duplicate messages
+                if (!prevMessages.some(msg => msg.id === data.id)) {
+                    return [...prevMessages, data];
+                }
+                return prevMessages;
+            });
+        });
+        
+
+        return () => {
+            pusher.unsubscribe(`private-chat-${selectedCustomer.id}-${adminId}`);
+        };
+    };
+
     return (
-        <div className={`${darkMode ? "dark" : ""} flex h-screen bg-white dark:bg-[#0F172A]`}>
-            {/* ✅ Sidebar */}
+        <>
+        <Head>
+        <title>Chat with Customer | Gown Rental</title> {/* ✅ Dynamic Title */}
+        <meta name="description" content="Manage your profile and settings on Gown Rental." />
+        <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
+    </Head>
+
+        <div className="flex h-screen bg-white">
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-            {/* ✅ Main Content */}
-            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
-                {/* ✅ Header */}
-                <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
-                    <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
-                    <div className="flex items-center space-x-2 md:space-x-4 mr-20">
-                        <Image src={imagePreview} alt="Profile" width={32} height={32} className="rounded-full border border-gray-300" />
-                        <span className="dark:text-white text-sm md:text-base">{`${firstName} ${lastName}`}</span>
-                    </div>
-                </header>
-
-                {/* ✅ Main Section */}
-                <main className="p-6 mt-16">
-                    {/* ✅ Breadcrumb */}
-                    <nav className="my-6 flex px-5 py-3 text-gray-700 rounded-lg bg-gray-50 dark:bg-[#1E293B]" aria-label="Breadcrumb">
-                        <ol className="inline-flex items-center space-x-1 md:space-x-3">
-                            <li className="inline-flex items-center">
-                                <a href="#" className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
-                                    </svg>
-                                    Home
-                                </a>
-                            </li>
-                            <li>
-                                <div className="flex items-center">
-                                    <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                    <a href="#" className="ml-1 text-sm font-medium text-gray-700 hover:text-gray-900 md:ml-2 dark:text-gray-400 dark:hover:text-white">
-                                        Chat
-                                    </a>
-                                </div>
-                            </li>
-                        </ol>
-                    </nav>
-
-                    {/* ✅ Chat Section */}
-                    <div className="flex h-[70vh] overflow-hidden border rounded-lg shadow-md">
-                        {/* Chat Sidebar */}
-                        <div className="w-1/4 bg-white border-r border-gray-300">
-                            <div className="overflow-y-auto h-full p-3">
-                                {contacts.map((contact) => (
-                                    <div
-                                        key={contact.id}
-                                        className={`flex items-center mb-4 cursor-pointer hover:bg-gray-100 p-2 rounded-md ${
-                                            selectedChat.id === contact.id ? "bg-gray-200" : ""
-                                        }`}
-                                        onClick={() => setSelectedChat(contact)}
-                                    >
-                                        <Image src={contact.avatar} alt={contact.name} width={48} height={48} className="w-12 h-12 rounded-full mr-3" />
-                                        <div className="flex-1">
-                                            <h2 className="text-lg font-semibold">{contact.name}</h2>
-                                        </div>
+           <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
+                          <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
+                              <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
+                          </header>
+                          <main className="p-6 mt-16">
+                         
+                    <div className="flex h-[70vh] border rounded-lg shadow-lg bg-white overflow-hidden"> 
+                        
+                        <div className="w-1/4 bg-pink-100 border-r border-pink-300 p-4 overflow-y-auto">
+                            <h2 className="text-xl font-bold text-pink-800 mb-4">Customers</h2> 
+                            {customers.map((customer) => (
+                                <div 
+                                    key={customer.id} 
+                                    className={`flex items-center justify-between p-3 mb-3 cursor-pointer rounded-lg transition 
+                                        ${selectedCustomer?.id === customer.id ? "bg-pink-300" : "hover:bg-pink-200"}`}
+                                    onClick={() => setSelectedCustomer(customer)}
+                                >
+                                    <div className="flex items-center">
+                                        <UserCircle size={40} className="mr-3 text-pink-600" />
+                                        <h2 className="text-lg font-semibold text-pink-900">{customer.name}</h2>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            ))}
                         </div>
 
-                        {/* Chat Messages */}
-                        <div className="flex-1 flex flex-col bg-gray-50">
-                            <div className="flex-1 overflow-y-auto p-4">
+                        <div className="flex-1 flex flex-col bg-white">
+                            <div className="flex-1 overflow-y-auto p-6">
                                 {messages.map((msg, index) => (
-                                    <div key={index} className={`flex items-center mb-4 ${msg.sender === "admin" ? "justify-end" : ""}`}>
-                                        <div className={`flex max-w-96 p-3 rounded-lg ${msg.sender === "admin" ? "bg-indigo-500 text-white" : "bg-white text-gray-700"}`}>
-                                            <p>{msg.message}</p>
+                                    <div key={index} className={`mb-3 flex ${msg.user_id === adminId ? "justify-end" : "justify-start"}`}>
+                                        <div className={`p-3 rounded-lg max-w-xs break-words shadow-md 
+                                            ${msg.user_id === adminId ? "bg-blue-500 text-white" : "bg-pink-300 text-black"}`}>
+                                            <span className="text-sm font-semibold block mb-1">
+                                                {msg.user_id === adminId ? "You" : selectedCustomer.name}
+                                            </span>
+                                            {msg.message}
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* ✅ Chat Input Aligned to Last Message */}
-                            <div className={`p-4 bg-white border-t flex ${messages.length && messages[messages.length - 1].sender === "admin" ? "justify-end" : ""}`}>
-                                <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} className="w-full p-2 border rounded-md" placeholder="Type a message..." />
-                                <button onClick={sendMessage} className="bg-indigo-500 text-white px-4 py-2 rounded-md ml-2">Send</button>
+                            <div className="p-4 border-t flex bg-pink-200">
+                                <input 
+                                    type="text" 
+                                    value={message} 
+                                    onChange={(e) => setMessage(e.target.value)} 
+                                    className="flex-1 border rounded-lg p-3 text-pink-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Type a message..."
+                                />
+                                <button 
+                                    onClick={sendMessage} 
+                                    className="bg-blue-500 text-white px-6 py-2 rounded-lg ml-3 font-semibold shadow-md hover:bg-blue-600 transition"
+                                >
+                                    Send
+                                </button>
                             </div>
                         </div>
                     </div>
                 </main>
             </div>
         </div>
+        </>
     );
 }

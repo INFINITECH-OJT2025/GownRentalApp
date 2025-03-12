@@ -12,12 +12,14 @@ import Navbar from "../components/Navbar"; // Adjust path if needed
 import Head from "next/head";
 import { useWishlist } from "../context/WishlistContext";
 import { useFavorites } from "../context/FavoritesContext";
-
+import ChatWidget from "../components/ChatWidget"; 
+import { Toaster } from "react-hot-toast";
 
 export default function HomePage() {
-    
+    const [discountGroups, setDiscountGroups] = useState({});
     const [isOpen, setIsOpen] = useState(false);
     const { setFavorites, addToFavorites, favorites } = useFavorites(); // ✅ Use Favorites Context
+    const [loadingButton, setLoadingButton] = useState(null); // ✅ Track loading state for buttons
 
     // State to control the calendar visibility for each gown
     const [calendarOpen, setCalendarOpen] = useState({});
@@ -27,7 +29,7 @@ export default function HomePage() {
     const [categories, setCategories] = useState([]);
 
 
-    const [priceRange, setPriceRange] = useState(15000); // Default max price
+    const [priceRange, setPriceRange] = useState(50000); // Default max price
     const [rentalDetails, setRentalDetails] = useState({});
 
 
@@ -91,21 +93,59 @@ export default function HomePage() {
     }, []);
     
     useEffect(() => {
-        axios.get("http://127.0.0.1:8000/api/products")
-            .then((response) => {
+        const fetchProducts = async () => {
+            try {
+                const response = await axios.get("http://127.0.0.1:8000/api/products");
+                console.log("📡 API Response (All Products):", response.data); // ✅ Debug API Response
+    
                 if (response.data && Array.isArray(response.data.data)) {
-                    // ✅ Filter products where `is_hidden = 0`
-                    setProducts(response.data.data.filter(product => product.is_hidden === 0));
+                    const allProducts = response.data.data;
+                    
+                    // ✅ Debug Hidden Products
+                    console.log("🔍 Hidden Products:", allProducts.filter(p => p.is_hidden === 1));
+    
+                    const visibleProducts = allProducts.filter(product => product.is_hidden === 0);
+                    setProducts(visibleProducts);
+    
+                    // ✅ Ensure discounts are properly grouped
+                    const discountGroups = {};
+                    visibleProducts.forEach((product) => {
+                        if (product.discounted_price && product.price) {
+                            const discount = Math.round(((product.price - product.discounted_price) / product.price) * 100);
+                            if (discount > 0) {
+                                if (!discountGroups[discount]) {
+                                    discountGroups[discount] = [];
+                                }
+                                discountGroups[discount].push(product);
+                            }
+                        }
+                    });
+    
+                    setDiscountGroups(discountGroups);
                 } else {
+                    console.error("❌ Unexpected API Response:", response.data);
                     setProducts([]);
                 }
-            })
-            .catch((error) => {
-                console.error("Error fetching products:", error);
+            } catch (error) {
+                console.error("❌ API Fetch Error:", error);
                 setProducts([]);
-            });
+            }
+        };
+    
+        fetchProducts();
     }, []);
     
+    
+        // Array of banner background colors
+        const bannerColors = [
+            "bg-red-500",
+            "bg-pink-500",
+            "bg-purple-500",
+            "bg-green-500",
+            "bg-yellow-500",
+            "bg-blue-500",
+        ];
+
 
     useEffect(() => {
         const fetchWishlist = async () => {
@@ -200,6 +240,7 @@ export default function HomePage() {
 
     return (
          <AuthGuard>
+            <Toaster /> 
             <Head>
                 <title>Home | Gown Rental</title> {/* ✅ Dynamic Title */}
                 <meta name="description" content="Manage your profile and settings on Gown Rental." />
@@ -218,17 +259,28 @@ export default function HomePage() {
                         Elegant styles, premium fabrics, and hassle-free gown rentals.
                     </p>
                     <div className="mt-6 flex flex-wrap justify-center md:justify-start">
-                        <Link href="/browse">
-                            <button className="bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition">
-                                Browse Gowns
-                            </button>
-                        </Link>
+                    <Link href="/browse">
+                    <button 
+                        onClick={() => setLoadingButton("browse")}
+                        disabled={loadingButton === "browse"}
+                        className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                            ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                        {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
+                    </button>
+                </Link>
 
-                        <Link href="/about">
-                            <button className="ml-4 border-2 border-white text-gray hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition">
-                                Learn More
-                            </button>
-                        </Link>
+                <Link href="/about">
+                    <button 
+                        onClick={() => setLoadingButton("learn")}
+                        disabled={loadingButton === "learn"}
+                        className={`ml-4 border-2 border-white text-gray hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                            ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                        {loadingButton === "learn" ? "Loading..." : "Learn More"}
+                    </button>
+                </Link>
+
 
                     </div>
                 </div>
@@ -239,55 +291,74 @@ export default function HomePage() {
                 <aside className="w-full md:w-1/4 bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-semibold text-gray-800">Filters</h2>
 
-                <ul className="mt-2 space-y-2 text-gray-600">
-                    {categories.length > 0 ? (
-                        categories.map((category) => (
-                            <li key={category}>
-                                <input
-                                    type="checkbox"
-                                    className="mr-2"
-                                    checked={selectedCategories.includes(category)}
-                                    onChange={() => handleCategoryChange(category)}
-                                />
-                                {category}
-                            </li>
-                        ))
-                    ) : (
-                        <p>Loading categories...</p>
-                    )}
-                </ul>
-
-
-
+                    {/* Category Filters */}
+                    <ul className="mt-2 space-y-2 text-gray-600">
+                        {categories.length > 0 ? (
+                            categories.map((category) => (
+                                <li key={category}>
+                                    <input
+                                        type="checkbox"
+                                        className="mr-2"
+                                        checked={selectedCategories.includes(category)}
+                                        onChange={() => handleCategoryChange(category)}
+                                    />
+                                    {category}
+                                </li>
+                            ))
+                        ) : (
+                            <p>Loading categories...</p>
+                        )}
+                    </ul>
 
                     {/* Price Range */}
                     <div className="mt-6">
                         <h3 className="text-lg font-medium text-pink-600">Price Range</h3>
                         <input 
-                        type="range"
-                        min="0"
-                        max="15000"
-                        value={priceRange}
-                        onChange={(e) => setPriceRange(Number(e.target.value))} // ✅ Updates price dynamically
-                        className="w-full mt-2 appearance-none bg-pink-300 h-2 rounded-lg outline-none cursor-pointer
-                        [&::-webkit-slider-thumb]:appearance-none
-                        [&::-webkit-slider-thumb]:w-5
-                        [&::-webkit-slider-thumb]:h-5
-                        [&::-webkit-slider-thumb]:bg-pink-600
-                        [&::-webkit-slider-thumb]:rounded-full
-                        [&::-webkit-slider-thumb]:cursor-pointer
-                        [&::-moz-range-thumb]:w-5
-                        [&::-moz-range-thumb]:h-5
-                        [&::-moz-range-thumb]:bg-pink-600
-                        [&::-moz-range-thumb]:rounded-full
-                        [&::-moz-range-thumb]:cursor-pointer"
-                    />
-                    <p className="text-pink-600 text-sm">Up to ₱{priceRange}</p> 
-
+                            type="range"
+                            min="0"
+                            max="50000"
+                            value={priceRange}
+                            onChange={(e) => setPriceRange(Number(e.target.value))}
+                            className="w-full mt-2 appearance-none bg-pink-300 h-2 rounded-lg outline-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:w-5
+                            [&::-webkit-slider-thumb]:h-5
+                            [&::-webkit-slider-thumb]:bg-pink-600
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:cursor-pointer"
+                        />
+                        <p className="text-pink-600 text-sm">Up to ₱{priceRange}</p>
                     </div>
-                    
+
+                    {/* ✅ Dynamic Promotional Banners */}
+                    <div className="mt-8">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">🔥 Promotions</h3>
+
+                        {Object.keys(discountGroups).length > 0 ? (
+                            Object.keys(discountGroups).map((discount, idx) => (
+                                <div 
+                                    key={idx} 
+                                    className={`p-4 rounded-lg shadow-md my-3 text-white text-center ${bannerColors[idx % bannerColors.length]}`}
+                                >
+                                    🎉 {discount}% OFF on:
+                                    <ul className="mt-2">
+                                        {discountGroups[discount].map((product, index) => (
+                                            <li
+                                                key={product.id}
+                                                className="inline-block px-3 py-1 font-semibold text-white bg-gray-900 rounded-lg mx-1"
+                                            >
+                                                {product.name}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-gray-500 text-sm">No promotions available.</p>
+                        )}
+                    </div>
                 </aside>
-                
+
 
                     {/* Product Section */}
                     <div className="w-full md:w-3/4">
@@ -331,14 +402,36 @@ export default function HomePage() {
                                         </Link>
 
                                         <p className="text-gray-500 text-sm">{product.category || "Uncategorized"}</p>
-                                        <p className="text-pink-600 text-lg font-bold"> ₱{Number(product.price).toLocaleString()}</p>
+                                        <div className="mt-2 flex items-center space-x-2">
+                                            {product.discounted_price && product.discounted_price < product.price ? (
+                                                <>
+                                                    <p className="text-red-500 text-lg font-bold line-through">
+                                                        ₱{Number(product.price).toLocaleString()}
+                                                    </p>
+                                                    <p className="text-green-600 text-sm font-semibold">
+                                                        ({Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF)
+                                                    </p>
+                                                    <p className="text-pink-600 text-xl font-bold">
+                                                        ₱{Number(product.discounted_price).toLocaleString()}
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p className="text-pink-600 text-lg font-bold">₱{Number(product.price).toLocaleString()}</p>
+                                            )}
+                                        </div>
 
                                         {/* Book Button (Click redirects to product page) */}
-                                        <Link href={`/products/${product.id}`} className="block">
-                                        <button className="w-full mt-3 md:mt-4 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-2 px-4 md:px-6 rounded-lg shadow-md transition">
-                                            Book
+                                        <Link href={`/products/${product.id}`}>
+                                        <button 
+                                            onClick={() => setLoadingButton(`book-${product.id}`)}
+                                            disabled={loadingButton === `book-${product.id}`}
+                                            className={`w-full mt-3 md:mt-4 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-2 px-4 md:px-6 rounded-lg shadow-md transition
+                                                ${loadingButton === `book-${product.id}` ? "opacity-50 cursor-not-allowed" : ""}`}
+                                        >
+                                            {loadingButton === `book-${product.id}` ? "Loading..." : "Book"}
                                         </button>
-                                        </Link>
+                                    </Link>
+
 
                                         {/* Wishlist & Favorite Icons (No Redirect) */}
                                         <div className="flex justify-center space-x-4 mt-3 md:mt-4">
@@ -396,6 +489,7 @@ export default function HomePage() {
                 {/* Footer */}
                 <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
+                <ChatWidget />
                 </footer>
             </div>
         </AuthGuard>

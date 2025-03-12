@@ -2,18 +2,20 @@
 
 import Head from "next/head";
 import AuthGuard from "../components/AuthGuard";
-import Navbar from "../components/Navbar"; // ✅ Navbar Component
+import Navbar from "../components/Navbar"; 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import DataTable from "react-data-table-component"; // ✅ Import DataTable
+import DataTable from "react-data-table-component";
 import { useRouter } from "next/navigation";
 import AdminPaymentDetails from "../components/AdminPaymentDetails";
+import ChatWidget from "../components/ChatWidget"; 
 
 export default function BookHistoryPage() {
     const [bookings, setBookings] = useState([]);
     const [filteredBookings, setFilteredBookings] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
+    const [loadingAction, setLoadingAction] = useState(null);
 
     // ✅ Modal States
     const [showProductModal, setShowProductModal] = useState(false);
@@ -30,6 +32,7 @@ const handleFileChange = (event, bookingId) => {
     setSelectedFile(event.target.files[0]);
     setSelectedBookingId(bookingId);
 };
+
 const handleUpload = async () => {
     if (!selectedFile) {
         alert("⚠ Please select a receipt image to upload.");
@@ -41,37 +44,34 @@ const handleUpload = async () => {
         return;
     }
 
+    setLoadingAction(selectedBookingId); // ✅ Start loading state
     setUploading(true);
+
     const formData = new FormData();
     formData.append("receipt", selectedFile);
     formData.append("booking_id", selectedBookingId);
 
     try {
         const token = localStorage.getItem("token");
-        const response = await axios.post(
-            "http://127.0.0.1:8000/api/bookings/upload-receipt",
-            formData,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "multipart/form-data",
-                },
-            }
-        );
+        await axios.post("http://127.0.0.1:8000/api/bookings/upload-receipt", formData, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "multipart/form-data",
+            },
+        });
 
-        if (response.data.success) {
-            alert("✅ Receipt uploaded successfully!");
-            window.location.reload(); // ✅ Refresh page to update receipt status
-        } else {
-            alert("❌ Failed to upload receipt. Please try again.");
-        }
+        alert("✅ Receipt uploaded successfully!");
+        window.location.reload();
     } catch (error) {
-        console.error("Error uploading receipt:", error);
-        alert("❌ An error occurred while uploading. Please try again.");
+        console.error("Upload Error:", error.response?.data || error);
+        alert("❌ Upload failed. Please try again.");
     } finally {
         setUploading(false);
+        setLoadingAction(null); // ✅ Stop loading state
     }
 };
+
+
 
 useEffect(() => {
     const fetchBookings = async () => {
@@ -102,14 +102,19 @@ const handleShowProduct = (product, voucherFee) => {
         return;
     }
 
-    setSelectedProduct({
-        ...product,
-        voucherFee: voucherFee || 0, // ✅ Include voucher fee
-        startDate: product.start_date || null,
-        endDate: product.end_date || null,
-    });
+    setLoadingAction(product.id); // ✅ Start loading state
 
-    setShowProductModal(true);
+    setTimeout(() => {
+        setSelectedProduct({
+            ...product,
+            voucherFee: voucherFee || 0,
+            startDate: product.start_date || null,
+            endDate: product.end_date || null,
+        });
+
+        setShowProductModal(true);
+        setLoadingAction(null); // ✅ Stop loading state
+    }, 800); // Simulated delay for UI effect
 };
 
 
@@ -182,6 +187,12 @@ const handleShowProduct = (product, voucherFee) => {
             sortable: true,
         },
         {
+            name: "Discounted Price",
+            selector: (row) => `₱${Number(row.product?.discounted_price).toLocaleString()}`,
+            sortable: true,
+            sortable: true,
+        },
+        {
             name: "Added Price",
             selector: (row) => `₱${Number(row.added_price).toLocaleString()}`,
             sortable: true,
@@ -200,15 +211,21 @@ const handleShowProduct = (product, voucherFee) => {
             name: "Status",
             selector: (row) => row.status,
             sortable: true,
+            width: "180px", // ✅ Adjusted column width
             cell: (row) => (
                 <span
-                    className={`px-3 py-1 text-white font-semibold rounded-full ${
+                    className={`px-5 py-2 text-white font-semibold rounded-full flex justify-center items-center text-center w-full ${
                         row.status === "pending"
                             ? "bg-yellow-500"
                             : row.status === "canceled"
                             ? "bg-red-500"
+                            : row.status === "returned"
+                            ? "bg-blue-500"
+                            : row.status === "picked up"
+                            ? "bg-purple-500"
                             : "bg-green-500"
                     }`}
+                    style={{ minWidth: "15px" }} // ✅ Ensures a minimum width
                 >
                     {row.status}
                 </span>
@@ -218,40 +235,46 @@ const handleShowProduct = (product, voucherFee) => {
             name: "Created Date",
             selector: (row) => new Date(row.created_at).toLocaleString(),
             sortable: true,
+            width: "140px", // ✅ Increased width
+            cell: (row) => (
+                <span className="whitespace-nowrap px-3">
+                    {new Date(row.created_at).toLocaleString()}
+                </span>
+            ),
         },
-
+        
         {
             name: "Actions",
+            selector: (row) => row.actions, 
+            center: true, 
+            width: "300px", 
             cell: (row) => (
-                <div className="flex space-x-2">
-                    {/* 👁 View Product Details */}
-                    {row.product ? (
-                        <button
-                            className="px-3 py-1 bg-pink-600 text-white rounded hover:bg-pink-700 transition"
-                            onClick={() => handleShowProduct(row.product)}
-                        >
-                            👁 View Product
-                        </button>
-                    ) : (
-                        <button className="px-3 py-1 bg-gray-400 text-gray-700 rounded cursor-not-allowed" disabled>
-                            ⚠ No Product
-                        </button>
-                    )}
-    
-                    {/* 📄 View Receipt */}
+                <div className="flex flex-col items-center justify-center gap-2 w-full">
+                    
+                    {/* 👁 View Product */}
+                    <button
+                        className={`w-44 px-6 py-2 text-white rounded-lg text-lg transition ${
+                            loadingAction === row.product?.id ? "bg-gray-500 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700"
+                        }`}
+                        onClick={() => row.product && handleShowProduct(row.product)}
+                        disabled={!row.product || loadingAction === row.product?.id}
+                    >
+                        {loadingAction === row.product?.id ? "Loading..." : "👁 View"}
+                    </button>
+        
+                    {/* 📤 Upload Receipt */}
                     {row.gcash_receipt ? (
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 handleShowReceipt(row.gcash_receipt);
                             }}
-                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition"
+                            className="w-44 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-lg"
                         >
-                            📄 Receipt
+                            📄 View Receipt
                         </button>
                     ) : (
                         <>
-                            {/* Upload File Input */}
                             <input
                                 type="file"
                                 accept="image/*"
@@ -262,32 +285,57 @@ const handleShowProduct = (product, voucherFee) => {
                             />
                             <label
                                 htmlFor={`file-upload-${row.id}`}
-                                className={`px-3 py-1 text-black rounded cursor-pointer transition ${
-                                    row.status === "canceled"
-                                        ? "bg-gray-400 cursor-not-allowed"
-                                        : "bg-orange-600 hover:bg-orange-700"
+                                className={`w-44 px-6 py-2 text-lg text-black text-center cursor-pointer transition 
+                                bg-gradient-to-b from-white to-orange-600 hover:to-orange-700 ${
+                                    row.status === "canceled" ? "bg-gray-400 cursor-not-allowed" : ""
                                 }`}
                             >
                                 📤 Upload
                             </label>
-    
-                            {/* Upload Button */}
-                            {selectedBookingId === row.id && selectedFile && (
+        
+                            {/* ✅ Show Save Button After Selecting a File */}
+                            {selectedFile && selectedBookingId === row.id && (
                                 <button
-                                    className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition ml-2"
                                     onClick={handleUpload}
-                                    disabled={uploading}
+                                    className={`w-44 px-6 py-2 text-white rounded-lg text-lg transition ${
+                                        loadingAction === row.id ? "bg-gray-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                                    }`}
+                                    disabled={loadingAction === row.id}
                                 >
-                                    {uploading ? "Uploading..." : "Upload"}
+                                    {loadingAction === row.id ? "Uploading..." : "💾 Save Upload"}
                                 </button>
                             )}
                         </>
+                    )}
+        
+                    {/* ⭐ Review Product */}
+                    {row.status === "returned" ? (
+                        <button
+                            onClick={() => {
+                                setLoadingAction(row.id); // ✅ Start loading state
+                                router.push(`/products/${row.product.id}`);
+                            }}
+                            className={`w-44 px-6 py-2 text-white rounded-lg text-lg transition ${
+                                loadingAction === row.id ? "bg-gray-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                            }`}
+                            disabled={loadingAction === row.id}
+                        >
+                            {loadingAction === row.id ? "Loading..." : "⭐ Review"}
+                        </button>
+                    ) : (
+                        <button
+                            className="w-44 px-6 py-2 bg-gray-400 text-gray-700 rounded-lg cursor-not-allowed text-lg"
+                            disabled
+                        >
+                            🚫 Review
+                        </button>
                     )}
                 </div>
             ),
             ignoreRowClick: true,
             allowOverflow: true,
-        },
+        },        
+        
     ];
     
     return (
@@ -317,7 +365,7 @@ const handleShowProduct = (product, voucherFee) => {
                     />
     
                     {/* 🔽 Filter by Status */}
-                    <select
+                      <select
                         className="border p-2 rounded w-full md:w-1/4"
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value)}
@@ -325,8 +373,11 @@ const handleShowProduct = (product, voucherFee) => {
                         <option value="">📌 All Status</option>
                         <option value="pending">🟡 Pending</option>
                         <option value="approved">✅ Approved</option>
+                        <option value="picked up">🟣 Picked Up</option> {/* ✅ Added Picked Up Status */}
                         <option value="canceled">❌ Canceled</option>
+                        <option value="returned">✅ Returned</option>
                     </select>
+
                 </div>
 
                 {/* Booking Table */}
@@ -360,20 +411,26 @@ const handleShowProduct = (product, voucherFee) => {
                             </div>
                         </div>
                     )}
-
-
-                {/* 🖼 Receipt Modal */}
-                {showReceiptModal && (
-                    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-                        <div className="relative bg-white p-4 rounded-lg shadow-lg max-w-lg w-full">
-                            <button className="absolute top-2 right-2 text-gray-700 text-xl font-bold hover:text-red-600 transition" onClick={closeReceiptModal}>
-                                ✖
-                            </button>
-                            <img src={receiptUrl} alt="Receipt" className="w-full rounded-lg" />
+                    {/* 🖼 Receipt Modal */}
+                    {showReceiptModal && (
+                        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                            <div className="relative bg-white p-4 rounded-lg shadow-lg w-[300px] h-[300px] flex items-center justify-center">
+                                <button 
+                                    className="absolute top-2 right-2 text-gray-700 text-lg font-bold hover:text-red-600 transition" 
+                                    onClick={closeReceiptModal}
+                                >
+                                    ✖
+                                </button>
+                                <img 
+                                    src={receiptUrl} 
+                                    alt="Receipt" 
+                                    className="w-[250px] h-[250px] object-cover rounded-md"
+                                />
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
             </div>
+             <ChatWidget />
         </AuthGuard>
     );
 }

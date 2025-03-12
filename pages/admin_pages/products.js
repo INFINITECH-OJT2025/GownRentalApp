@@ -7,6 +7,8 @@ import DataTable from "react-data-table-component";
 import { Pencil, Trash2, PlusCircle, XCircle,EyeOff } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import Head from "next/head";
+import ChatWidgetPage from "../../components/chat"; 
 
 export default function ProductsPage() {
     const [products, setProducts] = useState([]);
@@ -17,6 +19,11 @@ export default function ProductsPage() {
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [isEditingImage, setIsEditingImage] = useState(false);
     const [photopeaURL, setPhotopeaURL] = useState(""); 
+    const [categories, setCategories] = useState([]);
+    const [filteredProducts, setFilteredProducts] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [isAddingProduct, setIsAddingProduct] = useState(false); // ✅ Tracks Add Product button state
+    const [isSavingChanges, setIsSavingChanges] = useState(false); // ✅ Tracks Save Changes button state
 
     const [formData, setFormData] = useState({
         name: "",
@@ -33,6 +40,32 @@ export default function ProductsPage() {
     useEffect(() => {
         fetchProducts();
     }, []);
+
+    const getCategoryCounts = (products) => {
+        const counts = {};
+        products.forEach((product) => {
+            counts[product.category] = (counts[product.category] || 0) + 1;
+        });
+        return counts;
+    };
+
+    // Fetch categories when products are loaded
+    useEffect(() => {
+        if (products.length > 0) {
+            const uniqueCategories = [...new Set(products.map((product) => product.category))];
+            setCategories(uniqueCategories);
+            setFilteredProducts(products);
+        }
+    }, [products]);
+
+    const filterByCategory = (category) => {
+        setSelectedCategory(category);
+        if (category === null) {
+            setFilteredProducts(products); // Show all products
+        } else {
+            setFilteredProducts(products.filter((product) => product.category === category));
+        }
+    };
 
     const fetchProducts = async () => {
         const token = localStorage.getItem("token");
@@ -143,36 +176,37 @@ export default function ProductsPage() {
         };
     };
     
-    
-    
     const handleAddProduct = async () => {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            alert("🚨 Unauthorized: No token found.");
+        if (!formData.image) {
+            alert("⚠️ Please process an image before submitting.");
             return;
         }
     
-            if (!formData.image) {
-                alert("⚠️ Please process an image before submitting.");
-                return;
-            }
-            const formattedStartDate = formData.start_date 
+        setIsAddingProduct(true); // ✅ Start loading state
+    
+        const token = localStorage.getItem("token");
+        if (!token) {
+            alert("🚨 Unauthorized: No token found.");
+            setIsAddingProduct(false); // ✅ Stop loading state
+            return;
+        }
+    
+        const formattedStartDate = formData.start_date 
             ? new Date(formData.start_date).toISOString().split("T")[0] 
             : "";
         const formattedEndDate = formData.end_date 
             ? new Date(formData.end_date).toISOString().split("T")[0] 
             : "";
-        
+    
         const productData = new FormData();
         productData.append("name", formData.name);
         productData.append("price", formData.price);
         productData.append("category", formData.category);
         productData.append("stock", formData.stock);
         productData.append("description", formData.description);
-        productData.append("start_date", formattedStartDate); // ✅ Ensure Date is Properly Formatted
-        productData.append("end_date", formattedEndDate); // ✅ Ensure Date is Properly Formatted
+        productData.append("start_date", formattedStartDate);
+        productData.append("end_date", formattedEndDate);
         productData.append("image_url", formData.image);
-        
     
         try {
             console.log("📡 Uploading product...");
@@ -197,8 +231,11 @@ export default function ProductsPage() {
         } catch (error) {
             console.error("❌ Error adding product:", error);
             alert("❌ An error occurred: " + error.message);
+        } finally {
+            setIsAddingProduct(false); // ✅ Stop loading state
         }
     };
+    
     
     const handleEditImage = () => {
         if (!formData.previewImage) {
@@ -261,10 +298,16 @@ export default function ProductsPage() {
         }
     };
     
-    
     const handleUpdateProduct = async () => {
+        if (!selectedProduct) return;
+    
+        setIsSavingChanges(true); // ✅ Start loading state
+    
         const token = localStorage.getItem("token");
-        if (!token || !selectedProduct) return;
+        if (!token) {
+            setIsSavingChanges(false); // ✅ Stop loading state
+            return;
+        }
     
         const formattedStartDate = formData.start_date 
             ? new Date(formData.start_date).toISOString().split("T")[0] 
@@ -282,7 +325,6 @@ export default function ProductsPage() {
         updateData.append("start_date", formattedStartDate);
         updateData.append("end_date", formattedEndDate);
     
-        // ✅ Fix: Remove `http://127.0.0.1:8000/storage/` & ensure proper format
         if (formData.image && formData.image instanceof File) {
             updateData.append("image", formData.image); // Upload new file
         } else if (formData.previewImage) {
@@ -312,9 +354,11 @@ export default function ProductsPage() {
         } catch (error) {
             console.error("❌ Error updating product:", error.response?.data || error);
             alert("❌ An error occurred: " + (error.response?.data?.message || "Unknown error"));
+        } finally {
+            setIsSavingChanges(false); // ✅ Stop loading state
         }
     };
-        
+    
     
     const columns = [
         {
@@ -360,6 +404,12 @@ export default function ProductsPage() {
     ];
     
     return (
+        <>
+        <Head>
+        <title>Product Management | Gown Rental</title> {/* ✅ Dynamic Title */}
+        <meta name="description" content="Manage your profile and settings on Gown Rental." />
+        <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
+    </Head>
         <div className="flex h-screen bg-white dark:bg-[#0F172A]">
             {/* Sidebar */}
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
@@ -378,52 +428,104 @@ export default function ProductsPage() {
                         <ol className="inline-flex items-center space-x-1 md:space-x-3">
                             <li className="inline-flex items-center">
                                 <a href="#" className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                                    </svg>
                                     Home
                                 </a>
                             </li>
                             <li>
-                                <a href="#" className="ml-1 text-sm font-medium text-gray-700 hover:text-gray-900 md:ml-2 dark:text-gray-400 dark:hover:text-white">
-                                    Products
-                                </a>
+                                <div className="flex items-center">
+                                    <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
+                                    </svg>
+                                    <a href="#" className="ml-1 text-sm font-medium text-gray-700 hover:text-gray-900 md:ml-2 dark:text-gray-400 dark:hover:text-white">
+                                        Products
+                                    </a>
+                                </div>
                             </li>
                         </ol>
                     </nav>
 
-                  {/* Title & Buttons */}
-                    <div className="flex justify-between items-center mb-6">
-                        <h1 className="text-3xl font-bold text-gray-800">Products</h1>
+                {/* Title Section */}
+                <div className="flex justify-between items-center mb-4">
+                    <h1 className="text-3xl font-bold text-gray-800">Products</h1>
+                     {/* Add Product Button */}
+                     <button
+                        onClick={() => {
+                            setSelectedProduct(null);
+                            setIsEditModalOpen(false);
+                            setIsAddModalOpen(true);
+                            setFormData({
+                                name: "",
+                                price: "",
+                                category: "",
+                                stock: "",
+                                description: "",
+                                start_date: "",
+                                end_date: "",
+                                image: null,
+                                previewImage: null,
+                            });
+                        }}
+                        className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 shadow-md transition"
+                    >
+                        <PlusCircle size={20} /> Add Product
+                    </button>
+                </div>
 
-                        {/* ✅ Separate Add Product Button */}
-                        <button
-                            onClick={() => {
-                                setSelectedProduct(null);
-                                setIsEditModalOpen(false); // Ensure "Edit Product" modal is closed
-                                setIsAddModalOpen(true); // Open "Add Product" modal
+                {/* Category Buttons & Add Product */}
+                    <div className="flex flex-wrap justify-between items-center gap-2 p-3 bg-gray-100 rounded-lg shadow-md">
+                        {/* Category Filter Buttons */}
+                        <div className="flex flex-wrap gap-2">
+                            {/* "All" Button (Now a Dark Primary Color) */}
+                            <button
+                                onClick={() => filterByCategory(null)}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition ${
+                                    selectedCategory === null 
+                                        ? "bg-gray-800 text-white" 
+                                        : "bg-gray-600 text-white hover:bg-gray-700"
+                                }`}
+                            >
+                                All ({products.length})
+                            </button>
 
-                                setFormData({
-                                    name: "",
-                                    price: "",
-                                    category: "",
-                                    stock: "",
-                                    description: "",
-                                    start_date: "",
-                                    end_date: "",
-                                    image: null,
-                                    previewImage: null,
-                                });
-                            }}
-                            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-                        >
-                            <PlusCircle size={20} /> Add Product
-                        </button>
+                            {/* Dynamic Colorful Category Buttons */}
+                            {categories.map((category, index) => {
+                                const categoryColors = [
+                                    "bg-blue-500 hover:bg-blue-600 text-white",
+                                    "bg-green-500 hover:bg-green-600 text-white",
+                                    "bg-purple-500 hover:bg-purple-600 text-white",
+                                    "bg-red-500 hover:bg-red-600 text-white",
+                                    "bg-orange-500 hover:bg-orange-600 text-white",
+                                    "bg-pink-500 hover:bg-pink-600 text-white",
+                                    "bg-yellow-500 hover:bg-yellow-600 text-white",
+                                    "bg-teal-500 hover:bg-teal-600 text-white",
+                                    "bg-indigo-500 hover:bg-indigo-600 text-white",
+                                    "bg-cyan-500 hover:bg-cyan-600 text-white",
+                                ];
+                                const buttonColor = categoryColors[index % categoryColors.length];
 
+                                return (
+                                    <button
+                                        key={category}
+                                        onClick={() => filterByCategory(category)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition ${buttonColor} ${
+                                            selectedCategory === category ? "ring-2 ring-black ring-offset-2" : ""
+                                        }`}
+                                    >
+                                        {category} ({getCategoryCounts(products)[category] || 0})
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
-
 
 
                     {/* Table Container */}
                     <div className="bg-white p-6 rounded-lg shadow-md">
-                        <DataTable columns={columns} data={products} pagination highlightOnHover />
+                    <DataTable columns={columns} data={filteredProducts} pagination highlightOnHover />
+
                     </div>
                 </main>
             </div>
@@ -486,7 +588,7 @@ export default function ProductsPage() {
 
                 <textarea 
                     name="description" 
-                    placeholder="Description *" 
+                    placeholder="Description (e.g Size : M) *" 
                     value={formData.description} 
                     onChange={handleChange} 
                     className="border p-1 rounded-md w-full text-xs"
@@ -548,36 +650,50 @@ export default function ProductsPage() {
                     <p className="text-center text-blue-500 mt-1 text-xs">⏳ Processing image...</p>
                 )}
 
-                {/* ✅ Add Product Button */}
-                <button 
-                    onClick={handleAddProduct} 
-                    className={`mt-2 px-2 py-1 rounded-md w-full text-xs ${
-                        isProcessingImage || 
-                        !formData.name || 
-                        !formData.price || 
-                        !formData.category || 
-                        !formData.stock || 
-                        !formData.description || 
-                        !formData.start_date || 
-                        !formData.end_date || 
-                        !formData.image 
-                            ? "bg-gray-400 cursor-not-allowed"  
-                            : "bg-green-600 hover:bg-green-700 text-white"
-                    }`}
-                    disabled={
-                        isProcessingImage || 
-                        !formData.name || 
-                        !formData.price || 
-                        !formData.category || 
-                        !formData.stock || 
-                        !formData.description || 
-                        !formData.start_date || 
-                        !formData.end_date || 
-                        !formData.image
-                    }
-                >
-                    {isProcessingImage ? "Processing..." : "Add Product"}
-                </button>
+              {/* ✅ Add Product Button */}
+            <button 
+                onClick={handleAddProduct} 
+                disabled={
+                    isAddingProduct || 
+                    isProcessingImage || 
+                    !formData.name || 
+                    !formData.price || 
+                    !formData.category || 
+                    !formData.stock || 
+                    !formData.description || 
+                    !formData.start_date || 
+                    !formData.end_date || 
+                    !formData.image
+                }
+                className={`mt-2 px-2 py-1 rounded-md w-full text-xs flex items-center justify-center space-x-2 transition-all ${
+                    isAddingProduct || 
+                    isProcessingImage || 
+                    !formData.name || 
+                    !formData.price || 
+                    !formData.category || 
+                    !formData.stock || 
+                    !formData.description || 
+                    !formData.start_date || 
+                    !formData.end_date || 
+                    !formData.image
+                        ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                }`}
+            >
+                {isAddingProduct || isProcessingImage ? (
+                    <>
+                        <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span>{isProcessingImage ? "Processing..." : "Adding..."}</span>
+                    </>
+                ) : (
+                    <span>Add Product</span>
+                )}
+            </button>
+
+
             </div>
         </div>
     </div>
@@ -673,18 +789,33 @@ export default function ProductsPage() {
 
                             {/* ✅ Save Changes Button Now Calls `handleUpdateProduct` */}
                             <button 
-                                onClick={handleUpdateProduct}  // 🔹 This ensures the function is used
-                                className="mt-3 bg-pink-600 text-white px-3 py-2 rounded-md hover:bg-pink-700 w-full text-sm"
-                            >
-                                Save Changes
-                            </button>
+                            onClick={handleUpdateProduct} 
+                            disabled={isSavingChanges} // ✅ Disable while saving changes
+                            className={`mt-3 bg-pink-600 text-white px-3 py-2 rounded-md w-full flex items-center justify-center space-x-2 ${
+                                isSavingChanges 
+                                    ? "bg-gray-400 text-gray-600 cursor-not-allowed"  // ✅ Disabled state
+                                    : "hover:bg-pink-700"
+                            }`}
+                        >
+                            {isSavingChanges ? (
+                                <>
+                                    <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                    </svg>
+                                    <span>Saving...</span>
+                                </>
+                            ) : (
+                                <span>Save Changes</span>
+                            )}
+                        </button>
+
                         </div>
                     </div>
                 </div>
             )}
-
-
-
         </div>
+        <ChatWidgetPage />
+         </>
     );
 }
