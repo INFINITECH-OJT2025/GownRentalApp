@@ -31,28 +31,33 @@ export default function ChatWidget() {
         }
     }, []);
 
-  // ✅ Fetch user details and initialize chat
-  const fetchUser = async (storedToken) => {
-    try {
-        const response = await fetch("http://127.0.0.1:8000/api/user", {
-            method: "GET",
-            headers: { Authorization: `Bearer ${storedToken}`, "Content-Type": "application/json" },
-        });
-
-        if (!response.ok) throw new Error("Failed to fetch user data");
-
-        const data = await response.json();
-        if (data?.user?.id) {
-            setUserId(data.user.id);
-            fetchAdmins(storedToken);
-            initializePusher(data.user.id);
-        } else {
-            alert("Error: Unable to retrieve user data.");
+    const fetchUser = async (storedToken) => {
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/user", {
+                method: "GET",
+                headers: { Authorization: `Bearer ${storedToken}`, "Content-Type": "application/json" },
+            });
+    
+            if (!response.ok) {
+                throw new Error(`Failed to fetch user data (Status: ${response.status})`);
+            }
+    
+            const data = await response.json();
+            if (data?.user?.id) {
+                setUserId(data.user.id);
+                fetchAdmins(storedToken);
+                initializePusher(data.user.id);
+            } else {
+                alert("⚠ Error: Unable to retrieve user data.");
+            }
+        } catch (error) {
+            console.error("❌ Error fetching user:", error);
+    
+            // ✅ Show alert instead of crashing
+            alert("⚠ Network error! Unable to fetch user data. Please check your connection and refresh.");
         }
-    } catch (error) {
-        console.error("Error fetching user:", error);
-    }
-};
+    };
+    
    // ✅ Fetch admins
 const fetchAdmins = async (storedToken) => {
     try {
@@ -72,7 +77,9 @@ const fetchAdmins = async (storedToken) => {
         }
     } catch (error) {
         console.error("Error fetching admins:", error);
+        alert("Failed to fetch admin list. Please refresh the page.");
     }
+
 };
 
     // ✅ Fetch messages only when chat is open
@@ -113,7 +120,7 @@ const fetchMessages = async () => {
         });
     } catch (error) {
         console.error("Error fetching messages:", error);
-        toast.error("Failed to load messages. Please try again!");
+        alert("Error loading messages. Please try again later.");
     }
 };
 

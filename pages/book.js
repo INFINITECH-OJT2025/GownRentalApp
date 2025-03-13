@@ -50,55 +50,50 @@ export default function BookingPage() {
 }, []);
 
 
-
-  useEffect(() => {
+useEffect(() => {
     if (!ref) {
       router.replace("/");
       return;
     }
-
+  
     const fetchBooking = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
-          alert("⚠ You must be logged in.");
-          router.replace("/login");
-          return;
+        alert("⚠ You must be logged in.");
+        router.replace("/login");
+        return;
       }
   
       try {
-          const response = await axios.get(`http://127.0.0.1:8000/api/bookings/${ref}`, {
-              headers: { Authorization: `Bearer ${token}` },
+        const response = await axios.get(`http://127.0.0.1:8000/api/bookings/${ref}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+  
+        if (response.data.success) {
+          const bookingData = response.data.booking;
+  
+          console.log("📡 Debug Booking Data:", bookingData); // ✅ Log API response
+  
+          setBooking({
+            ...bookingData,
+            start_date: bookingData.start_date ? bookingData.start_date : "N/A",
+            end_date: bookingData.end_date ? bookingData.end_date : "N/A",
           });
-  
-          if (response.data.success) {
-              const bookingData = response.data.booking;
-  
-              console.log("Fetched Booking Data:", bookingData); // ✅ Debugging
-  
-              const discountedPrice = Number(bookingData.discounted_price) || Number(bookingData.total_price) || 0;
-              const addedPrice = Number(bookingData.added_price) || 0;
-              const voucherFee = Number(bookingData.voucher_fee) || 0;
-  
-              const calculatedFinalPrice = Math.max(0, discountedPrice + addedPrice - voucherFee);
-  
-              setBooking(bookingData);
-              setFinalPrice(calculatedFinalPrice); // ✅ Always store as a number
-              setPointsToUse(voucherFee);
-          } else {
-              alert("❌ Booking not found.");
-              router.replace("/products");
-          }
-      } catch (error) {
-          console.error("❌ Error fetching booking:", error);
-          alert("❌ An error occurred while fetching the booking.");
+        } else {
+          alert("❌ Booking not found.");
           router.replace("/products");
+        }
+      } catch (error) {
+        console.error("❌ Error fetching booking:", error);
+        alert("❌ An error occurred while fetching the booking.");
+        router.replace("/products");
       }
-  };
-  
+    };
   
     fetchBooking();
   }, [ref, router]);
-
+  
+  
   const handleFileChange = (event) => {
     const file = event.target.files[0];
     if (!file) return;

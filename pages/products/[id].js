@@ -16,6 +16,7 @@ import * as poseDetection from "@tensorflow-models/pose-detection";
 import * as tf from "@tensorflow/tfjs";
 import ReviewSection from "../../components/ReviewSection";
 import ChatWidget from "../../components/ChatWidget"; 
+import { toast, Toaster } from "react-hot-toast";
 
 export default function ProductDetailPage() {
   const videoRef = useRef(null);
@@ -245,26 +246,31 @@ useEffect(() => {
 }, [isCameraOn]);
 
 useEffect(() => {
-  if (id) {
-    const fetchProduct = async () => {
-      try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/products/${id}`);
-        setProduct(response.data);
-      } catch (error) {
-        console.error("❌ Error fetching product:", error);
+  const fetchProduct = async () => {
+    try {
+      const response = await axios.get(`http://127.0.0.1:8000/api/products/${id}`);
+      setProduct(response.data);
+    } catch (error) {
+      console.error("❌ Error fetching product:", error);
 
-        // ✅ Show alert instead of crashing with a runtime error
-        if (!error.response) {
-          alert("⚠ Network Error! Unable to fetch product details. Please check your internet connection.");
-        } else {
-          alert(`⚠ Error: ${error.response?.data?.message || "Something went wrong."}`);
-        }
+      // ✅ Handle network errors and 404 gracefully
+      if (!error.response) {
+        alert("⚠ Network Error! Please check your internet connection and refresh the page.");
+      } else if (error.response.status === 404) {
+        alert("⚠ Product is loading");
+      } else {
+        alert("⚠ Unable to fetch product details. Please try again later.");
       }
-    };
 
+      setProduct(null); // ✅ Prevent UI from breaking
+    }
+  };
+
+  if (id) {
     fetchProduct();
   }
 }, [id]);
+
 
 
 useEffect(() => {
@@ -312,19 +318,16 @@ useEffect(() => {
     } catch (error) {
       console.error("❌ Error fetching wishlist:", error);
 
-      // ✅ Handle Network Error Gracefully
-      if (!error.response) {
-        alert("⚠ Network error! Unable to load wishlist. Please check your internet connection.");
-      } else {
-        alert(`⚠ Error fetching wishlist: ${error.response?.data?.message || "Unexpected error occurred."}`);
-      }
+      // ✅ Show alert instead of causing a runtime error
+      alert("⚠ Unable to load wishlist. Please check your internet connection and try again.");
+
+      // ✅ Set a default safe value
+      setWishlist([]);
     }
   };
 
   fetchWishlist().catch(err => console.error("❌ Unhandled fetchWishlist error:", err)); // ✅ Ensure no unhandled rejections
 }, [setWishlist]);
-
-
 
 
   // ✅ Add product to wishlist
@@ -476,12 +479,12 @@ const handleBooking = async () => {
   const token = localStorage.getItem("token");
 
   if (!token) {
-    alert("⚠ You must be logged in to book.");
+    toast.error("⚠ You must be logged in to book.");
     return;
   }
 
   if (!rentalDetails.startDate || !rentalDetails.endDate) {
-    alert("⚠ Please select both a Start Date and an End Date before booking.");
+    toast.error("⚠ Please select both a Start Date and an End Date before booking.");
     return;
   }
 
@@ -490,35 +493,50 @@ const handleBooking = async () => {
 
   try {
     setIsBooking(true);
-    const response = await axios.post("http://127.0.0.1:8000/api/bookings", {
-      product_id: product.id,
-      start_date: rentalDetails.startDate,
-      end_date: rentalDetails.endDate,
-      total_price: rentalDetails.totalPrice,
-    }, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+
+    const formattedStartDate = new Date(rentalDetails.startDate).toISOString().split("T")[0];
+    const formattedEndDate = new Date(rentalDetails.endDate).toISOString().split("T")[0];
+
+    const response = await axios.post(
+      "http://127.0.0.1:8000/api/bookings",
+      {
+        product_id: product.id,
+        start_date: formattedStartDate,
+        end_date: formattedEndDate,
+        added_price: rentalDetails.addedPrice,
+        total_price: rentalDetails.totalPrice,
+        discounted_price: product.discounted_price, // ✅ Send discounted price
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
 
     if (response.data.success) {
-      alert("✅ Booking successful!");
+      const refNumber = response.data.booking.reference_number;
+
+      // ✅ Emit Storage Event for Real-Time Navbar Update
+      localStorage.setItem("bookingUpdated", Date.now());
+      window.dispatchEvent(new Event("storage"));
+
+      toast.success("Booking successful! Redirecting...");
+
+      setTimeout(() => {
+        setIsBooking(false);
+        router.push(`/book?ref=${refNumber}`);
+      }, 1500);
     } else {
-      alert("❌ Booking failed!");
+      toast.error("❌ Failed to book. Please try again.");
+      setIsBooking(false);
     }
   } catch (error) {
     console.error("Error booking:", error);
-
-    // ✅ Handle Network Error Gracefully
-    if (!error.response) {
-      alert("⚠ Network Error! Unable to process your booking. Please check your internet connection.");
-    } else {
-      alert(`⚠ Booking Error: ${error.response?.data?.message || "Something went wrong."}`);
-    }
-  } finally {
+    toast.dismiss();
+    toast.error(error.response?.data?.message || "❌ An error occurred.");
     setIsBooking(false);
   }
 };
-
-
 
 useEffect(() => {
   if (id) {

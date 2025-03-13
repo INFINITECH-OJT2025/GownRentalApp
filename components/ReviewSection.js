@@ -12,7 +12,26 @@ export default function ReviewSection({ productId }) {
   const [unreviewedBookings, setUnreviewedBookings] = useState([]);
   const [selectedBooking, setSelectedBooking] = useState("");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const reviewsPerPage = 2; // Set number of reviews per page
+
+  const indexOfLastReview = currentPage * reviewsPerPage;
+  const indexOfFirstReview = indexOfLastReview - reviewsPerPage;
+  const currentReviews = reviews.slice(indexOfFirstReview, indexOfLastReview);
+
+  const totalPages = Math.ceil(reviews.length / reviewsPerPage);
+
+  const nextPage = () => {
+      if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+
+  const prevPage = () => {
+      if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+
   // ✅ Fetch Reviews
+  
   useEffect(() => {
     if (!productId) return;
 
@@ -39,39 +58,51 @@ export default function ReviewSection({ productId }) {
   }, [productId]);
 
   useEffect(() => {
+    if (!productId) {
+        console.warn("⚠ Product ID is missing. Skipping review eligibility check.");
+        return;
+    }
+
     const checkReviewEligibility = async () => {
-      try {
-        const token = localStorage.getItem("token");
-  
-        if (!token) {
-          console.warn("⚠ No authentication token found. Skipping review eligibility check.");
-          return;
+        try {
+            const token = localStorage.getItem("token");
+            if (!token) {
+                console.warn("⚠ No authentication token found. Skipping review eligibility check.");
+                return;
+            }
+
+            const apiUrl = `http://127.0.0.1:8000/api/bookings/check-review-eligibility/${productId}`;
+            console.log("Checking review eligibility with API:", apiUrl);
+
+            const response = await axios.get(apiUrl, {
+                headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+            });
+
+            if (response.status === 200 && response.data.success) {
+                setUnreviewedBookings(response.data.unreviewed_bookings || []);
+            } else {
+                console.warn("⚠ Review eligibility check failed:", response.data.message);
+                setUnreviewedBookings([]);
+            }
+        } catch (error) {
+            console.error("❌ Error checking review eligibility:", error);
+
+            if (!error.response) {
+                alert("⚠ Network error! Please check your internet connection.");
+            } else if (error.response.status === 404) {
+                alert("⚠ No eligible bookings found for review.");
+            } else {
+                alert("⚠ Unable to check review eligibility. Please try again later.");
+            }
+
+            setUnreviewedBookings([]); // Prevent UI crash
         }
-  
-        const apiUrl = `http://127.0.0.1:8000/api/bookings/check-review-eligibility/${productId}`;
-        console.log("Checking review eligibility with API:", apiUrl);
-  
-        const response = await axios.get(apiUrl, {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        });
-  
-        if (response.status === 200 && response.data.success) {
-          setUnreviewedBookings(response.data.unreviewed_bookings || []);
-        } else {
-          console.warn("⚠ Review eligibility check failed:", response.data.message);
-        }
-      } catch (error) {
-        if (error.response?.status === 404) {
-          console.warn("⚠ Product not found. Skipping review eligibility check.");
-        } else {
-          console.error("Error checking review eligibility:", error);
-        }
-      }
     };
-  
+
     checkReviewEligibility();
-  }, [productId]);
-  
+}, [productId]);
+
+
   
   const submitReview = async () => {
     if (!selectedBooking) {
@@ -170,31 +201,60 @@ export default function ReviewSection({ productId }) {
       ) : reviews.length === 0 ? (
         <p>No reviews yet. Be the first to review!</p>
       ) : (
-        reviews.map((review) => (
-          <div key={review.id} className="border-b py-4">
-            <p className="font-semibold">
-              {review.user ? review.user.name : "Anonymous"}
-            </p>
-
-            {/* ⭐ Display Saved Rating */}
-            <div className="flex text-yellow-500">
-              {[...Array(Number(review.rating))].map((_, i) => (
-                <Star key={i} size={18} className="text-yellow-400" />
-              ))}
-            </div>
-            
-            <p className="text-gray-600">{review.comment}</p>
-
-            {review.admin_reply && (
-              <div className="mt-2 p-3 bg-gray-100 rounded">
-                <p className="text-sm text-gray-800">
-                  <strong className="text-blue-500">Admin Reply:</strong> {review.admin_reply}
-                </p>
+        <>
+          {currentReviews.map((review) => (
+            <div key={review.id} className="border-b py-4">
+              <p className="font-semibold">{review.user ? review.user.name : "Anonymous"}</p>
+          
+              {/* ⭐ Display Saved Rating */}
+              <div className="flex text-yellow-500">
+                {[...Array(Number(review.rating))].map((_, i) => (
+                  <Star key={i} size={18} className="text-yellow-400" />
+                ))}
               </div>
-            )}
+          
+              <p className="text-gray-600">{review.comment}</p>
+          
+              {review.admin_reply && (
+                <div className="mt-2 p-3 bg-gray-100 rounded">
+                  <p className="text-sm text-gray-800">
+                    <strong className="text-blue-500">Admin Reply:</strong> {review.admin_reply}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* ✅ Pagination Controls */}
+          <div className="flex justify-between mt-4">
+            <button 
+              onClick={prevPage} 
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded transition-colors duration-200 ${
+                currentPage === 1 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-pink-500 text-white hover:bg-gray-600"
+              }`}
+            >
+              Previous
+            </button>
+
+            <span className="text-lg font-semibold">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button 
+              onClick={nextPage} 
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded transition-colors duration-200 ${
+                currentPage === totalPages ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-pink-500 text-white hover:bg-gray-600"
+              }`}
+            >
+              Next
+            </button>
           </div>
-        ))
+
+        </>
       )}
+
     </div>
   );
 }
