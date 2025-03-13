@@ -16,34 +16,36 @@ use App\Mail\BookingCanceledMail;
 class BookingController extends Controller
 {
     public function show($referenceNumber)
-{
-    $booking = Booking::with('product')->where('reference_number', $referenceNumber)->first();
+    {
+        $booking = Booking::with('product')->where('reference_number', $referenceNumber)->first();
+        
+        if (!$booking) {
+            return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
+        }
     
-    if (!$booking) {
-        return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
+       return response()->json([
+        'success' => true,
+        'booking' => [
+            'id' => $booking->id,
+            'reference_number' => $booking->reference_number,
+            'product' => [
+                'id' => $booking->product->id,
+                'name' => $booking->product->name,
+            ],
+            'start_date' => $booking->start_date, // ✅ Include Start Date
+            'end_date' => $booking->end_date, // ✅ Include End Date
+            'discounted_price' => (float) ($booking->discounted_price ?? $booking->total_price),
+            'total_price' => (float) $booking->total_price,
+            'added_price' => (float) $booking->added_price,
+            'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
+            'gcash_receipt' => $booking->gcash_receipt,
+            'status' => $booking->status,
+            'created_at' => $booking->created_at,
+            'updated_at' => $booking->updated_at
+        ]
+    ]);    
     }
-
-   return response()->json([
-    'success' => true,
-    'booking' => [
-        'id' => $booking->id,
-        'reference_number' => $booking->reference_number,
-        'product' => [
-            'id' => $booking->product->id,
-            'name' => $booking->product->name,
-        ],
-        'discounted_price' => (float) ($booking->discounted_price ?? $booking->total_price), // ✅ Ensure it's a float
-        'total_price' => (float) $booking->total_price, // ✅ Convert to float
-        'added_price' => (float) $booking->added_price,
-        'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
-        'gcash_receipt' => $booking->gcash_receipt,
-        'status' => $booking->status,
-        'created_at' => $booking->created_at,
-        'updated_at' => $booking->updated_at
-    ]
-]);    
-
-}
+    
 
 public function applyDiscount(Request $request)
 {
