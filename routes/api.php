@@ -16,7 +16,24 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ContactController;
+use App\Models\User;
+use App\Models\Chat;
 
+Route::middleware('auth:api')->get('/user', function (Request $request) {
+    $user = $request->user(); // ✅ Get authenticated user from Passport
+
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    return response()->json([
+        'id' => $user->id,
+        'name' => $user->name,
+        'email' => $user->email,
+        'role' => $user->role, // ✅ Check if admin or customer
+        'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
+    ]);
+});
 Route::get('/product/{id}/approved-bookings', function ($id) {
     $approvedBookings = Booking::where('product_id', $id)
         ->where('status', 'Approved') // ✅ Ensure status matches exactly
@@ -55,7 +72,19 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/chats', [ChatController::class, 'store']); // Send message
 });
 
+Route::middleware('auth:api')->get('/chat/senders/{receiverId}', [ChatController::class, 'getChatSenders']);
 
+Route::post('/mark-messages-read/{user_id}', function ($user_id) {
+    try {
+        \App\Models\Chat::where('receiver_id', $user_id)->where('is_read', false)->update(['is_read' => true]);
+
+        return response()->json(['success' => true, 'message' => 'Messages marked as read']);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+});
+
+Route::get('/chat/last-message/{receiverId}', [ChatController::class, 'getLastMessage']);
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/customers', [UserController::class, 'getCustomers']); // ✅ Fetch all customer users

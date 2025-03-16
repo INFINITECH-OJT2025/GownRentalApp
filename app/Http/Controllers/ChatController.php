@@ -9,6 +9,7 @@ use App\Events\NewChatMessage;
 use App\Events\MessageSent;
 use App\Models\User;
 
+
 class ChatController extends Controller {
 
     public function getCustomerMessages($customerId, $adminId)
@@ -126,6 +127,32 @@ public function getCustomersWithUnreadMessages(Request $request)
     }
 }
 
+public function getChatSenders($receiverId)
+{
+    // ✅ Get distinct users who sent messages to `receiver_id`
+    $senders = Chat::where('receiver_id', $receiverId)
+        ->select('user_id', 'created_at') // ✅ Use created_at directly
+        ->groupBy('user_id', 'created_at')
+        ->orderByDesc('created_at') // ✅ Order by latest message time
+        ->get();
+
+    // ✅ Fetch sender details
+    $senderUsers = $senders->map(function ($sender) {
+        $user = \App\Models\User::find($sender->user_id);
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'created_at' => $sender->created_at, // ✅ Include created_at timestamp
+        ];
+    });
+
+    return response()->json([
+        'success' => true,
+        'senders' => $senderUsers,
+    ]);
+}
+
 
     // ✅ Fetch messages for an admin (Admin ↔ Customers)
     public function getAdminMessages($adminId)
@@ -183,6 +210,29 @@ public function getCustomersWithUnreadMessages(Request $request)
         return response()->json(['error' => 'Internal Server Error', 'details' => $e->getMessage()], 500);
     }
 }
+
+public function getLastMessage($receiverId)
+{
+    try {
+        // ✅ Fetch the most recent message received by this user
+        $lastMessage = Chat::where('receiver_id', $receiverId)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$lastMessage) {
+            return response()->json(['message' => 'No messages found', 'last_message_id' => null], 200);
+        }
+
+        return response()->json([
+            'success' => true,
+            'last_message_id' => $lastMessage->id
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Failed to fetch last message', 'message' => $e->getMessage()], 500);
+    }
+}
+
 
     
     // ✅ Fetch chat messages
