@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState, useEffect } from "react";
+import { ChatContext } from "../context/ChatContext";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -19,8 +20,11 @@ import {
     Star,
     MessageCircle,
     LogOut,
-    Loader2, // ✅ Import Loader Icon
+    Loader2,
+    Bell,
 } from "lucide-react";
+import moment from "moment";
+import Image from "next/image";
 import axios from "axios"; 
 import Cookies from "js-cookie"; // ✅ Import Cookies
 
@@ -28,10 +32,32 @@ export default function AdminSidebar({ isSidebarOpen, toggleSidebar, darkMode, t
     const pathname = usePathname();
     const router = useRouter();
     const [isLoggingOut, setIsLoggingOut] = useState(false); // ✅ Logout loading state
-
-
-    // ✅ Track loading state for links
+    const { newMessageTotal, senders, fetchChatSenders, clearNotifications } = useContext(ChatContext);
+    const [showNotifications, setShowNotifications] = useState(false);
     const [loadingLink, setLoadingLink] = useState(null);
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+            setUser(JSON.parse(storedUser)); // ✅ Store user in state
+        }
+    }, []);
+
+    // ✅ Handle clicking the notification bell
+    const handleNotificationClick = async () => {
+        if (showNotifications) {
+            // ✅ If clicked twice, clear the messages
+            clearNotifications(user?.id);
+        }
+        setShowNotifications((prev) => !prev);
+    };
+    
+    // ✅ Handle navigation inside the sidebar
+    const handleNavigation = (href) => {
+        setLoadingLink(href); // ✅ Set loading state for the clicked link
+        router.push(href);
+    };
 
     const handleLogout = async () => {
         setIsLoggingOut(true); // ✅ Start loading
@@ -91,23 +117,58 @@ export default function AdminSidebar({ isSidebarOpen, toggleSidebar, darkMode, t
                 </div>
 
                 <nav className="mt-6 flex flex-col space-y-2 flex-grow">
-                    {menuItems.map((item) => (
-                        <button 
-                            key={item.href}
-                            onClick={() => {
-                                setLoadingLink(item.href); // ✅ Set Loading State
-                                router.push(item.href);
-                            }}
-                            disabled={loadingLink === item.href} // ✅ Disable while loading
-                            className={`flex items-center space-x-3 p-2 rounded-md transition-all w-full text-left ${
-                                pathname === item.href ? "bg-pink-500 text-white" : "hover:bg-pink-300"
-                            } ${loadingLink === item.href ? "opacity-50 cursor-not-allowed" : ""}`} // ✅ Show loading effect
-                        >
-                            {loadingLink === item.href ? <Loader2 size={20} className="animate-spin" /> : item.icon}
-                            {isSidebarOpen && <span>{item.label}</span>}
-                        </button>
-                    ))}
-                </nav>
+                      {/* 🔔 Chat Notifications (Admin) */}
+                      <div className="relative p-4">
+                      <button className="relative text-black hover:text-pink-500 right-3" onClick={handleNotificationClick}>
+                        <Bell className="h-6 w-6" />
+                        {newMessageTotal > 0 && (
+                            <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center justify-center">
+                                !
+                            </span>
+                        )}
+                    </button>
+
+                        {/* 📩 Notification Dropdown */}
+                        {showNotifications && (
+                            <div className="absolute left-0 mt-2 w-64 bg-white shadow-lg rounded-md z-50 border border-gray-300 overflow-hidden">
+                                <div className="p-3 border-b text-gray-700 font-semibold">
+                                    New Messages ({newMessageTotal})
+                                </div>
+                                <div className="max-h-64 overflow-y-auto"> {/* ✅ Scrollable */}
+                                    {senders.length > 0 ? (
+                                        <ul className="p-3 text-gray-500 text-sm">
+                                            {senders.map((sender) => (
+                                                <li key={sender.id} className="flex items-center space-x-2 border-b py-2">
+                                                    <div>
+                                                        <span className="font-semibold">{sender.name}</span> sent you a message!
+                                                        <br />
+                                                        <span className="text-xs text-gray-400">{moment(sender.created_at).calendar()}</span>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <div className="p-3 text-gray-500 text-sm">No new messages</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                {menuItems.map((item) => (
+                    <button 
+                        key={item.href}
+                        onClick={() => handleNavigation(item.href)} // ✅ Use the function here
+                        disabled={loadingLink === item.href} // ✅ Prevents multiple clicks
+                        className={`flex items-center space-x-3 p-2 rounded-md transition-all w-full text-left ${
+                            pathname === item.href ? "bg-pink-500 text-white" : "hover:bg-pink-300"
+                        } ${loadingLink === item.href ? "opacity-50 cursor-not-allowed" : ""}`} // ✅ Show loading effect
+                    >
+                        {loadingLink === item.href ? <Loader2 size={20} className="animate-spin" /> : item.icon}
+                        {isSidebarOpen && <span>{item.label}</span>}
+                    </button>
+                ))}
+            </nav>
+
             </div>
 
             {/* ✅ Logout Button (Only on Dashboard) */}

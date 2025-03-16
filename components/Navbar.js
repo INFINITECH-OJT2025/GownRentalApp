@@ -1,28 +1,59 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import { Heart, Star, ShoppingCart, User, LogOut } from "lucide-react"; 
+import { Heart, Star, ShoppingCart, User, Bell, LogOut } from "lucide-react"; 
 import { useWishlist } from "../context/WishlistContext";
 import { useFavorites } from "../context/FavoritesContext";
-import { useBook } from "../context/BookContext"; // ✅ Add this line
+import { useBook } from "../context/BookContext"; 
+import moment from "moment";
+import { ChatContext } from "../context/ChatContext"; 
 
 export default function Navbar() {
+    const router = useRouter();
+
     const { wishlist } = useWishlist() || { wishlist: [] };
     const { favorites } = useFavorites() || { favorites: [] }; 
-    const { bookingCount, updateBookingCount } = useBook(); // ✅ Use updateBookingCount
-    const router = useRouter();
-    const [isOpen, setIsOpen] = useState(false);
+    const { bookingCount, updateBookingCount } = useBook(); 
     const [wishlistCount, setWishlistCount] = useState(0);
     const [favoritesCount, setFavoritesCount] = useState(0);
-    const [user, setUser] = useState(null);
     const [loadingLink, setLoadingLink] = useState(null); // ✅ Track which link is loading
     const [loadingLogout, setLoadingLogout] = useState(false); // ✅ Track logout loading state
+    const [isOpen, setIsOpen] = useState(false);
+    const { newMessageTotal, senders, fetchChatSenders, clearNotifications } = useContext(ChatContext);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [user, setUser] = useState(null);
+    const [ setSenders] = useState([]); 
+    const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
-    // ✅ Function to Manually Update Wishlist Count in Real Time
+    useEffect(() => {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
+            fetchChatSenders(parsedUser.id); // ✅ Fetch messages for logged-in user
+        }
+    }, []);
+
+    useEffect(() => {
+        if (user?.id) {
+            fetchChatSenders(user.id); // ✅ Fetch who messaged this user
+        }
+    }, [user]);
+
+   
+    const handleNotificationClick = async () => {
+        if (showNotifications) {
+            // ✅ If clicked twice, clear the messages
+            clearNotifications(user.id);
+        }
+        setShowNotifications((prev) => !prev);
+    };
+    
+
 
     const handleNavigation = (href) => {
         setLoadingLink(href); // ✅ Set loading state for the clicked link
@@ -223,6 +254,44 @@ export default function Navbar() {
                         </span>
                     </button>
 
+                    <div className="hidden md:flex space-x-6 items-center">
+                    <div className="relative">
+                    <button className="relative text-black hover:text-pink-500" onClick={handleNotificationClick}>
+                            <Bell className="h-6 w-6" />
+                            {newMessageTotal > 0 && (
+                                 <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center justify-center">
+                                 !
+                             </span>
+                            )}
+                        </button>
+
+                      {/* 📩 Notification Dropdown */}
+                    {showNotifications && (
+                        <div className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-md z-50 border border-gray-300 overflow-hidden">
+                            <div className="p-3 border-b text-gray-700 font-semibold">
+                                New Messages ({newMessageTotal})
+                            </div>
+                            <div className="max-h-64 overflow-y-auto"> {/* ✅ Scrollable */}
+                                {senders.length > 0 ? (
+                                    <ul className="p-3 text-gray-500 text-sm">
+                                        {senders.map((sender) => (
+                                            <li key={sender.id} className="flex items-center space-x-2 border-b py-2">
+                                                <div>
+                                                    <span className="font-semibold">{sender.name}</span> sent you a message!
+                                                    <br />
+                                                    <span className="text-xs text-gray-400">{moment(sender.created_at).calendar()}</span>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <div className="p-3 text-gray-500 text-sm">No new messages</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                        </div>
+                        </div>
 
                     <button
                         onClick={() => handleNavigation("/profile")}
@@ -311,6 +380,65 @@ export default function Navbar() {
                     >
                         {loadingLink === "/profile" ? "Loading..." : "Profile"}
                     </button>
+
+                    <div className="md:flex space-x-6 items-center">
+                        {/* 🔔 Notification Bell (Desktop) */}
+                        <div className="hidden md:block relative">
+                            <button className="relative text-gray-700 hover:text-pink-600" onClick={handleNotificationClick}>
+                                <Bell className="h-6 w-6" />
+                                {newMessageTotal > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                       !
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* 📱 Mobile Notification Bell */}
+                        <div className="md:hidden flex items-center space-x-3">
+                            <button className="relative text-gray-700 hover:text-pink-600" onClick={handleNotificationClick}>
+                                <Bell className="h-6 w-6" />
+                                {newMessageTotal > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                       !
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* 📩 Notification Dropdown - Adjusted for Mobile */}
+                        {showNotifications && (
+                            <div className="absolute right-0 md:left-auto top-12 md:top-auto w-72 bg-white shadow-lg rounded-md z-50 border border-gray-300 overflow-hidden md:w-64 md:right-0">
+                                <div className="p-3 border-b text-gray-700 font-semibold flex justify-between items-center">
+                                    <span>New Messages</span>
+                                    <button 
+                                        onClick={() => setShowNotifications(false)} 
+                                        className="text-red-500 text-sm hover:underline"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                                <div className="max-h-64 overflow-y-auto p-3"> {/* ✅ Scrollable */}
+                                    {senders.length > 0 ? (
+                                        <ul className="text-gray-500 text-sm space-y-2">
+                                            {senders.map((sender) => (
+                                                <li key={sender.id} className="flex items-center space-x-3 border-b py-2">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold">{sender.name}</span> 
+                                                        <span className="text-xs text-gray-400">{moment(sender.created_at).calendar()}</span>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <div className="text-gray-500 text-sm">No new messages</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+
 
                     <button
                         onClick={handleLogout}

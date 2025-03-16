@@ -1,77 +1,158 @@
+"use client";
 import { createContext, useContext, useState, useEffect } from "react";
-import Pusher from "pusher-js";
 import axios from "axios";
 
-const ChatContext = createContext();
+export const ChatContext = createContext();
 
-export function ChatProvider({ children }) {
-    const [unreadCounts, setUnreadCounts] = useState({}); // ✅ Track unread messages per user/admin
-    const [messages, setMessages] = useState([]); // ✅ Store messages globally
+export const ChatProvider = ({ children }) => {
+    const [unreadCounts, setUnreadCounts] = useState({});
+    const [messages, setMessages] = useState([]);
+    const [newMessageTotal, setNewMessageTotal] = useState(0);
+    const [senders, setSenders] = useState([]);
     const [userId, setUserId] = useState(null);
-    const [isAdmin, setIsAdmin] = useState(false); // ✅ Track if user is admin
 
-    useEffect(() => {
-        const storedToken = localStorage.getItem("token");
-        if (storedToken) fetchUser(storedToken);
-    }, []);
-
-    const fetchUser = async (storedToken) => {
+    const fetchChatSenders = async (receiverId) => {
         try {
+            const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+            if (!token || !receiverId) return;
+    
+            const response = await axios.get(`http://127.0.0.1:8000/api/chat/senders/${receiverId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+    
+            if (response.data.success) {
+                // ✅ Only update state if there's a change (to prevent infinite re-renders)
+                if (response.data.senders.length !== newMessageTotal) {
+                    setSenders(response.data.senders);
+                    setNewMessageTotal(response.data.senders.length);
+    
+                    if (typeof window !== "undefined") {
+                        localStorage.setItem("newMessageTotal", response.data.senders.length.toString());
+                        window.dispatchEvent(new Event("storage")); // ✅ Notify UI to update
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching chat senders:", error);
+        }
+    };
+    
+
+    // ✅ Fetch user details once & start checking for messages
+    const fetchUser = async () => {
+        try {
+            const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+            if (!token) return;
+
             const response = await axios.get("http://127.0.0.1:8000/api/user", {
-                headers: { Authorization: `Bearer ${storedToken}` },
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             if (response.data?.user?.id) {
                 setUserId(response.data.user.id);
-                setIsAdmin(response.data.user.role === "admin"); // ✅ Check if the user is an admin
-                initializePusher(response.data.user.id, response.data.user.role);
+                fetchChatSenders(response.data.user.id); 
             }
         } catch (error) {
             console.error("Error fetching user:", error);
         }
     };
 
+    useEffect(() => {
+        let lastMessageId = null; // ✅ Track the last known message ID
+    
+        const checkForNewMessages = async () => {
+            if (!userId) return;
+    
+            try {
+                const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+                if (!token) return;
+    
+                const response = await axios.get(`http://127.0.0.1:8000/api/chat/last-message/${userId}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+    
+                const latestMessageId = response.data?.last_message_id;
+    
+                // ✅ Only fetch chat senders if a new message exists
+                if (latestMessageId && latestMessageId !== lastMessageId) {
+                    lastMessageId = latestMessageId;
+                    fetchChatSenders(userId);
+                }
+            } catch (error) {
+                console.error("Error checking for new messages:", error);
+            }
+        };
+    
+        // ✅ Set an interval to check for updates (only fetch if a new message exists)
+        const interval = setInterval(checkForNewMessages, 5000);
+    
+        return () => clearInterval(interval);
+    }, [userId]);
+    
 
-   const initializePusher = (userId) => {
-    if (!userId) return;
-
-    const pusher = new Pusher("0a411d03b9315833003e", {
-        cluster: "ap1",
-        encrypted: true,
-    });
-
-    const channel = pusher.subscribe(`private-chat-${userId}`);
-
-    // ✅ Listen for new messages (customer -> admin OR admin -> customer)
-    channel.bind("message-sent", (data) => {
-        if (data.receiver_id === userId) {
-            setMessages((prevMessages) => [...prevMessages, data]);
-
-            // ✅ Increase unread count for the specific sender
-            setUnreadCounts((prev) => ({
-                ...prev,
-                [data.sender_id]: (prev[data.sender_id] || 0) + 1,
-            }));
+    // ✅ Refresh messages manually when sending a new message
+    const refreshMessages = () => {
+        if (userId) {
+            fetchChatSenders(userId);
         }
-    });
-
-    return () => {
-        pusher.unsubscribe(`private-chat-${userId}`);
     };
-};
 
+    // ✅ Mark messages as read & reset notification count
+    const clearNotifications = async (receiverId) => {
+        try {
+            const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+            if (!token) return;
+
+            await axios.post(`http://127.0.0.1:8000/api/mark-messages-read/${receiverId}`, {}, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            setNewMessageTotal(0);
+            setSenders([]);
+            if (typeof window !== "undefined") {
+                localStorage.setItem("newMessageTotal", "0");
+                window.dispatchEvent(new Event("storage"));
+            }
+        } catch (error) {
+            console.error("Error marking messages as read:", error);
+        }
+    };
+
+    // ✅ Fetch user once on mount
+    useEffect(() => {
+        fetchUser();
+    }, []);
+
+    // ✅ Update UI in real time with localStorage events
+    useEffect(() => {
+        const handleStorageChange = (event) => {
+            if (event.key === "newMessageTotal") {
+                setNewMessageTotal(parseInt(localStorage.getItem("newMessageTotal") || "0", 10));
+            }
+        };
+
+        window.addEventListener("storage", handleStorageChange);
+        return () => window.removeEventListener("storage", handleStorageChange);
+    }, []);
 
     return (
-        <ChatContext.Provider value={{ messages, setMessages, unreadCounts, setUnreadCounts, isAdmin }}>
+        <ChatContext.Provider value={{
+            messages,
+            setMessages,
+            unreadCounts,
+            setUnreadCounts,
+            newMessageTotal,
+            senders,
+            fetchChatSenders,
+            clearNotifications,
+            refreshMessages,
+        }}>
             {children}
         </ChatContext.Provider>
     );
+};
 
-    
-}
-
+// ✅ Custom Hook for Using ChatContext
 export function useChat() {
     return useContext(ChatContext);
 }
-
-

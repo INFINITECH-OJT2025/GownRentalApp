@@ -14,7 +14,8 @@ export default function ChatWidgetPage() {
     const [adminId, setAdminId] = useState(null);
     const [token, setToken] = useState(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
-    const { unreadCounts, setUnreadCounts } = useChat();
+    const { unreadCounts, setUnreadCounts } = useChat()
+    const [showDropdown, setShowDropdown] = useState(false);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -288,52 +289,59 @@ export default function ChatWidgetPage() {
             {isChatOpen && (
                 <div className="fixed bottom-16 right-6 w-80 bg-white shadow-lg rounded-lg border border-gray-300">
                     {/* Header */}
+                   {/* Chat Widget Header */}
                     <div className="bg-pink-500 text-white p-3 flex justify-between items-center rounded-t-lg">
-                        <span className="font-semibold">Chat with {selectedCustomer?.name || "Customer"}</span>
-                        <X className="cursor-pointer" onClick={() => setIsChatOpen(false)} />
+                        <span className="font-semibold">
+                            Chat with {selectedCustomer?.name || "Customer"}
+                        </span>
+                        <X className="cursor-pointer hover:text-gray-200" onClick={() => setIsChatOpen(false)} />
                     </div>
 
-                   {/* Customer Selector with Unread Badge */}
-                    <div className="bg-pink-100 p-2 text-pink-800 font-semibold text-center flex justify-between items-center relative">
-                    <div className="relative w-full">
-                    <select
-                        className="bg-pink-100 w-full p-2 rounded-md text-center cursor-pointer 
-                                appearance-none truncate max-h-40 overflow-y-auto block"
-                        onChange={(e) => {
-                            const customer = customers.find(c => c.id == e.target.value);
-                            setSelectedCustomer(customer);
-                            fetchMessages();
-                        }}
-                        value={selectedCustomer?.id || ""}
-                    >
-                        {customers.map((customer) => (
-                            <option key={customer.id} value={customer.id}>
-                                {customer.name} {unreadCounts[customer.id] > 0 ? `(New Message: ${unreadCounts[customer.id]})` : ""}
-                            </option>
-                        ))}
-                    </select>
+                    {/* Customer Selector with Unread Badge */}
+                        <div className="bg-white p-2 border-b border-gray-300 flex justify-between items-center relative rounded-t-lg">
+                            <div className="relative w-full">
+                                {/* Customer Selector Button */}
+                                <button
+                                    className="relative bg-pink-200 text-pink-900 px-4 py-2 rounded-md w-full flex justify-between items-center truncate overflow-hidden"
+                                    onClick={() => setShowDropdown(!showDropdown)} // ✅ Toggle dropdown visibility
+                                >
+                                    <span className="truncate">{selectedCustomer?.name || "Select Customer"}</span>
+                                    <ChevronDown className="text-gray-600" />
+                                </button>
+
+                                {/* Dropdown for Selecting Customer */}
+                                {showDropdown && (
+                                    <div className="absolute top-full left-0 w-full bg-white border border-gray-300 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
+                                        {customers.map((customer) => (
+                                            <div
+                                                key={customer.id}
+                                                className="p-2 hover:bg-pink-100 text-pink-900 cursor-pointer truncate"
+                                                onClick={() => {
+                                                    setSelectedCustomer(customer);
+                                                    setShowDropdown(false); // ✅ Close dropdown after selecting
+                                                }}
+                                            >
+                                                {customer.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
 
-                        {/* 🔴 Show "New Message" badge outside the select */}
-                        {unreadCounts[selectedCustomer?.id] && (
-                            <span className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-red-500 text-white 
-                                            text-xs font-bold px-2 py-1 rounded-full">
-                                New Message
-                            </span>
-                        )}
-                    </div>
 
-
-                        <ChevronDown className="absolute right-3 cursor-pointer" />
-                    </div>
-
-                    {/* Chat Messages */}
+                   {/* Chat Messages */}
                     <div className="p-3 h-64 overflow-y-auto bg-gray-100">
                         {messages.map((msg, index) => (
                             <div key={index} className={`mb-2 flex ${msg.user_id === adminId ? "justify-end" : "justify-start"}`}>
-                                <div className={`p-2 rounded-lg max-w-xs break-words shadow-md 
-                                    ${msg.user_id === adminId ? "bg-blue-500 text-white" : "bg-pink-300 text-black"}`}>
-                                    <span className="text-sm font-semibold block mb-1">
+                                <div className={`p-2 rounded-lg max-w-xs break-words shadow-md text-sm font-medium
+                                    ${msg.user_id === adminId 
+                                        ? "bg-pink-500 text-white px-3 py-2 rounded-xl" 
+                                        : "bg-gray-200 text-pink px-3 py-2 rounded-xl"
+                                    }`}
+                                >
+                                    <span className="text-xs font-semibold block mb-1">
                                         {msg.user_id === adminId ? "You" : selectedCustomer?.name || "Customer"}
                                     </span>
                                     {msg.message}
@@ -342,18 +350,19 @@ export default function ChatWidgetPage() {
                         ))}
                     </div>
 
+
                     {/* Message Input */}
                     <div className="p-2 border-t bg-white flex items-center">
                         <input
                             type="text"
-                            className="flex-1 p-2 border rounded-lg outline-none"
+                            className="flex-1 p-2 border rounded-lg outline-none text-sm"
                             placeholder="Type a message..."
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
                         />
                         <button
                             onClick={sendMessage}
-                            className="bg-pink-500 text-white px-3 py-2 rounded-lg ml-2 shadow-md hover:bg-pink-600 transition"
+                            className="bg-pink-500 text-white px-4 py-2 rounded-lg ml-2 shadow-md hover:bg-pink-600 transition"
                         >
                             <Send size={20} />
                         </button>

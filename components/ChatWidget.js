@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, X, Send, ChevronDown } from "lucide-react";
 import Pusher from "pusher-js";
 import { toast, Toaster } from "react-hot-toast";
 import { useChat } from "../context/ChatContext"; 
@@ -307,7 +307,7 @@ const toggleChat = () => {
                         disabled={admins.length === 0}
                     >
                         {selectedAdmin ? selectedAdmin.name : "Select Admin"}
-
+                          <ChevronDown className="text-gray-600" />
                         {/* 🔴 Badge for Unread Messages */}
                         {unreadCounts[selectedAdmin?.id] && unreadCounts[selectedAdmin.id] === "New message" && (
                             <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
@@ -369,7 +369,7 @@ const toggleChat = () => {
                             placeholder="Type a message..."
                         />
                         <button onClick={sendMessage} className="bg-pink-500 text-white px-4 py-2 rounded ml-2">
-                            Send
+                          <Send size={20} />
                         </button>
                     </div>
                 </div>
