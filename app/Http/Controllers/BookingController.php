@@ -229,7 +229,7 @@ public function uploadReceipt(Request $request)
         'start_date' => $startDate,
         'end_date' => $endDate,
         'added_price' => $validated['added_price'],
-        'total_price' => $validated['total_price'],
+        'total_price' => $validated['total_price'] - $validated['added_price'], // ✅ Remove duplicate added_price
         'discounted_price' => $validated['discounted_price'] ?? $validated['total_price'],
         'voucher_fee' => $validated['voucher_fee'] ?? 0.00,
         'reference_number' => $referenceNumber,

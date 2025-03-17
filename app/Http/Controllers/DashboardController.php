@@ -338,10 +338,10 @@ public function updateProduct(Request $request, $id)
         // ✅ Handle Image Upload
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('products', 'public');
-            $validated['image'] = str_replace("public/", "", $imagePath); // ✅ Ensure it saves as `products/filename.png`
+            $validated['image'] = str_replace("storage/", "", $imagePath); // ✅ Ensure only `products/filename.extension` is stored
         } elseif ($request->filled('image_url')) {
-            $validated['image'] = str_replace("http://127.0.0.1:8000/storage/", "", $request->image_url); // ✅ Ensure correct format
-        }
+            $validated['image'] = str_replace(["/storage/", "http://127.0.0.1:8000/storage/"], "", $request->image_url); // ✅ Fix URL path
+        }        
 
         // ✅ Update only provided fields
         $product->update(array_filter($validated));
