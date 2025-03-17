@@ -63,22 +63,28 @@ useEffect(() => {
         router.replace("/login");
         return;
       }
-  
+    
       try {
         const response = await axios.get(`http://127.0.0.1:8000/api/bookings/${ref}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-  
+    
         if (response.data.success) {
           const bookingData = response.data.booking;
-  
           console.log("📡 Debug Booking Data:", bookingData); // ✅ Log API response
-  
+    
           setBooking({
             ...bookingData,
             start_date: bookingData.start_date ? bookingData.start_date : "N/A",
             end_date: bookingData.end_date ? bookingData.end_date : "N/A",
           });
+    
+          // ✅ Set `finalPrice` correctly on page load
+          const totalAmount = (Number(bookingData.discounted_price) || Number(bookingData.total_price) || 0) +
+                              (Number(bookingData.added_price) || 0) -
+                              (Number(bookingData.voucher_fee) || 0); // ✅ Deduct already applied voucher
+    
+          setFinalPrice(Math.max(0, totalAmount)); // Ensure it doesn't go negative
         } else {
           alert("❌ Booking not found.");
           router.replace("/products");
@@ -88,7 +94,7 @@ useEffect(() => {
         alert("❌ An error occurred while fetching the booking.");
         router.replace("/products");
       }
-    };
+    };    
   
     fetchBooking();
   }, [ref, router]);
@@ -192,23 +198,23 @@ const handlePointsChange = (event) => {
   let value = parseInt(event.target.value, 10) || 0;
 
   if (value > user.loyalty_points) {
-      alert("❌ You cannot use more points than you have!");
-      value = user.loyalty_points;
+    alert("❌ You cannot use more points than you have!");
+    value = user.loyalty_points;
   } else if (value < 0) {
-      value = 0;
+    value = 0;
   }
 
   setPointsToUse(value);
 
-  // ✅ Ensure added rental price is included
-  const discountedTotal = (Number(booking?.discounted_price) || Number(booking?.total_price) || 0) + 
-                          (Number(booking?.added_price) || 0);
-  
-  const newPrice = Math.max(0, discountedTotal - value);
+  // ✅ Ensure added rental price & discounts are included correctly
+  const basePrice = (Number(booking?.discounted_price) || Number(booking?.total_price) || 0) +
+                    (Number(booking?.added_price) || 0) -
+                    (Number(booking?.voucher_fee) || 0); // ✅ Deduct already applied voucher
+
+  const newPrice = Math.max(0, basePrice - value);
 
   setFinalPrice(Number(newPrice.toFixed(2))); // ✅ Ensure proper number format
 };
-
 
 
 const applyDiscount = async () => {

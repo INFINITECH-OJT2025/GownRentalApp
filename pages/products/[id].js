@@ -505,21 +505,15 @@ const handleBooking = async () => {
         end_date: formattedEndDate,
         added_price: rentalDetails.addedPrice,
         total_price: rentalDetails.totalPrice,
-        discounted_price: product.discounted_price, // ✅ Send discounted price
+        discounted_price: product.discounted_price || product.price,
       },
       {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
 
-
     if (response.data.success) {
       const refNumber = response.data.booking.reference_number;
-
-      // ✅ Emit Storage Event for Real-Time Navbar Update
-      localStorage.setItem("bookingUpdated", Date.now());
-      window.dispatchEvent(new Event("storage"));
-
       toast.success("Booking successful! Redirecting...");
 
       setTimeout(() => {
@@ -527,16 +521,33 @@ const handleBooking = async () => {
         router.push(`/book?ref=${refNumber}`);
       }, 1500);
     } else {
-      toast.error("❌ Failed to book. Please try again.");
+      toast.error(response.data.message || "❌ Failed to book. Please try again.");
       setIsBooking(false);
     }
   } catch (error) {
-    console.error("Error booking:", error);
-    toast.dismiss();
-    toast.error(error.response?.data?.message || "❌ An error occurred.");
     setIsBooking(false);
+
+    // ✅ Catch and suppress Next.js runtime errors
+    if (error.response) {
+      if (error.response.status === 422) {
+        // ✅ Show a clean message for validation errors
+        if (error.response.data.errors?.end_date) {
+          alert("⚠ Please select an end date that is after the start date.");
+        } else {
+          alert("⚠ Booking failed. Please check your inputs.");
+        }
+      } else {
+        alert(error.response?.data?.message || "❌ Something went wrong.");
+      }
+    } else {
+      alert("⚠ Network error. Please check your internet connection.");
+    }
+
+    // ✅ Suppress Next.js unhandled runtime error
+    return Promise.resolve();
   }
 };
+
 
 useEffect(() => {
   if (id) {

@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import Head from "next/head";
 import ChatWidget from "../components/ChatWidget";
 import axios from "axios";
+import { toast, Toaster } from "react-hot-toast";
 
 export default function ContactPage() {
     const [formData, setFormData] = useState({
@@ -25,22 +26,29 @@ export default function ContactPage() {
         e.preventDefault();
         setLoading(true);
         setResponseMessage("");
-
+    
         try {
             const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact`, formData, {
                 headers: { "Content-Type": "application/json" },
             });
-
+    
             if (res.data.success) {
-                setResponseMessage("Message sent successfully! We will contact you soon.");
+                toast.success("Message sent successfully! We will contact you soon.");
                 setFormData({ name: "", email: "", message: "" }); // Reset form
             }
         } catch (error) {
-            setResponseMessage("Failed to send message. Please try again.");
+            if (error.response && error.response.data.errors) {
+                // Extract and display first validation error
+                const errorMessage = Object.values(error.response.data.errors)[0][0];
+                toast.error(errorMessage);
+            } else {
+                toast.error("Failed to send message. Please try again.");
+            }
         } finally {
             setLoading(false);
         }
     };
+    
 
     return (
         <AuthGuard>
@@ -61,7 +69,7 @@ export default function ContactPage() {
                     </p>
                 </section>
 
-                <div className="container mx-auto px-6 md:px-16 py-16 grid md:grid-cols-2 gap-12">
+                <div className="flex items-center justify-center min-h-screen px-6 md:px-16">
                     <div className="bg-white p-8 rounded-lg shadow-md">
                         <h2 className="text-3xl font-semibold text-pink-600 mb-6">Send Us a Message</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">

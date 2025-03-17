@@ -134,9 +134,6 @@ const handleLogin = async (event) => {
                         Remember Me
                     </label>
 
-                            <a href="#" className="text-pink-500 text-sm hover:underline">
-                                Forgot Password?
-                            </a>
                         </div>
                         <button
                             type="submit"

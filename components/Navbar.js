@@ -23,7 +23,17 @@ export default function Navbar() {
     const [loadingLink, setLoadingLink] = useState(null); // ✅ Track which link is loading
     const [loadingLogout, setLoadingLogout] = useState(false); // ✅ Track logout loading state
     const [isOpen, setIsOpen] = useState(false);
-    const { newMessageTotal, senders, fetchChatSenders, clearNotifications } = useContext(ChatContext);
+    const { 
+        newMessageTotal, 
+        senders, 
+        fetchChatSenders, 
+        clearNotifications, 
+        polling, 
+        setPolling, 
+        isPollingActive, 
+        setIsPollingActive 
+    } = useContext(ChatContext);
+    
     const [showNotifications, setShowNotifications] = useState(false);
     const [user, setUser] = useState(null);
     const [ setSenders] = useState([]); 
@@ -268,9 +278,33 @@ export default function Navbar() {
                       {/* 📩 Notification Dropdown */}
                     {showNotifications && (
                         <div className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-md z-50 border border-gray-300 overflow-hidden">
-                            <div className="p-3 border-b text-gray-700 font-semibold">
-                                New Messages ({newMessageTotal})
+                            <div className="p-3 border-b text-gray-700 font-semibold flex justify-between items-center">
+                                <span>New Messages ({newMessageTotal})</span>
+                                <button
+                                    onClick={() => {
+                                        setPolling((prev) => {
+                                            const newPollingState = !prev;
+
+                                            setIsPollingActive(newPollingState); // ✅ Fix: Ensure `setIsPollingActive` exists
+
+                                            if (!newPollingState) {
+                                                console.clear(); // ✅ Clear network logs
+                                                console.log("🔴 Polling turned OFF - Logs Cleared");
+                                            } else {
+                                                console.log("✅ Polling turned ON");
+                                            }
+
+                                            return newPollingState;
+                                        });
+                                    }}
+                                    className="text-xs bg-gray-200 px-2 py-1 rounded-md hover:bg-gray-300 transition"
+                                >
+                                    {polling ? "Turn Off Notif" : "Turn On Notif"}
+                                </button>
+
+
                             </div>
+
                             <div className="max-h-64 overflow-y-auto"> {/* ✅ Scrollable */}
                                 {senders.length > 0 ? (
                                     <ul className="p-3 text-gray-500 text-sm">
@@ -410,14 +444,37 @@ export default function Navbar() {
                         {showNotifications && (
                             <div className="absolute right-0 md:left-auto top-12 md:top-auto w-72 bg-white shadow-lg rounded-md z-50 border border-gray-300 overflow-hidden md:w-64 md:right-0">
                                 <div className="p-3 border-b text-gray-700 font-semibold flex justify-between items-center">
-                                    <span>New Messages</span>
-                                    <button 
-                                        onClick={() => setShowNotifications(false)} 
-                                        className="text-red-500 text-sm hover:underline"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
+                                <span>New Messages ({newMessageTotal})</span>
+                                <div className="flex space-x-2">
+                                <button
+                                    onClick={() => {
+                                        setPolling((prev) => {
+                                            const newPollingState = !prev;
+                                            setIsPollingActive(newPollingState); // ✅ Fix: Ensure polling stops completely
+
+                                            if (!newPollingState) {
+                                                console.clear(); // ✅ Clear network logs
+                                                console.log("🔴 Polling turned OFF - Logs Cleared");
+                                            } else {
+                                                console.log("✅ Polling turned ON");
+                                            }
+
+                                            return newPollingState;
+                                        });
+                                    }}
+                                    className="text-xs bg-gray-200 px-2 py-1 rounded-md hover:bg-gray-300 transition"
+                                >
+                                    {polling ? "Turn Off Notif" : "Turn On Notif"}
+                                </button>
+                                <button 
+                                    onClick={() => setShowNotifications(false)} 
+                                    className="text-red-500 text-sm hover:underline"
+                                >
+                                    Close
+                                </button>
+                            </div>
+
+                            </div>
                                 <div className="max-h-64 overflow-y-auto p-3"> {/* ✅ Scrollable */}
                                     {senders.length > 0 ? (
                                         <ul className="text-gray-500 text-sm space-y-2">

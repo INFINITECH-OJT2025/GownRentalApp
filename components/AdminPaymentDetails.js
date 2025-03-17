@@ -29,15 +29,16 @@ export default function AdminPaymentDetails() {
             <h2 className="text-xl font-semibold text-gray-800">GCash Payment Details</h2>
 
             {/* ✅ GCash QR Code */}
-            <div className="w-48 h-48 flex items-center justify-center bg-white rounded-lg shadow-md p-2 border border-gray-300 mt-4">
+            <div className="w-64 h-96 flex items-center justify-center bg-white rounded-lg shadow-lg p-4 border-2 border-gray-400 mt-4">
                 {loading ? (
                     <p className="text-gray-500">Loading QR Code...</p>
                 ) : adminQRCode ? (
-                    <img src={adminQRCode} alt="Admin GCash QR Code" className="w-full h-full object-contain rounded-md" />
+                    <img src={adminQRCode} alt="Admin GCash QR Code" className="w-full h-full object-cover rounded-lg" />
                 ) : (
                     <p className="text-gray-500">QR Code not available</p>
                 )}
             </div>
+
 
             {/* ✅ GCash Details */}
             <div className="mt-4 text-lg text-gray-800 text-center">

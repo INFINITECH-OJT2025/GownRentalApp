@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 export const ChatContext = createContext();
@@ -10,7 +10,14 @@ export const ChatProvider = ({ children }) => {
     const [newMessageTotal, setNewMessageTotal] = useState(0);
     const [senders, setSenders] = useState([]);
     const [userId, setUserId] = useState(null);
+    const [polling, setPolling] = useState(true); // ✅ Add this to enable/disable polling
+    const [isPollingActive, setIsPollingActive] = useState(true);
 
+
+
+    const retryCount = useRef(0); // ✅ Moved useRef to the top level
+
+    
     const fetchChatSenders = async (receiverId) => {
         try {
             const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -58,7 +65,12 @@ export const ChatProvider = ({ children }) => {
     };
 
     useEffect(() => {
-        let lastMessageId = null; // ✅ Track the last known message ID
+        let interval = null;
+    
+        if (!polling || !isPollingActive) {
+            console.log("🔴 Polling is OFF - No API calls");
+            return; // ✅ Stop execution immediately if polling is OFF
+        }
     
         const checkForNewMessages = async () => {
             if (!userId) return;
@@ -73,21 +85,30 @@ export const ChatProvider = ({ children }) => {
     
                 const latestMessageId = response.data?.last_message_id;
     
-                // ✅ Only fetch chat senders if a new message exists
-                if (latestMessageId && latestMessageId !== lastMessageId) {
-                    lastMessageId = latestMessageId;
+                if (latestMessageId) {
                     fetchChatSenders(userId);
+                    retryCount.current = 0;
                 }
             } catch (error) {
-                console.error("Error checking for new messages:", error);
+                if (error.response?.status === 429) {
+                    retryCount.current = Math.min(retryCount.current + 1, 5);
+                }
+            }
+    
+            if (polling && isPollingActive) {
+                interval = setTimeout(checkForNewMessages, Math.min(5000 * (2 ** retryCount.current), 60000));
             }
         };
     
-        // ✅ Set an interval to check for updates (only fetch if a new message exists)
-        const interval = setInterval(checkForNewMessages, 5000);
+        checkForNewMessages();
     
-        return () => clearInterval(interval);
-    }, [userId]);
+        return () => {
+            console.log("🛑 Polling Stopped - Clearing Interval");
+            clearTimeout(interval);
+        };
+    }, [userId, polling, isPollingActive]);
+    
+            
     
 
     // ✅ Refresh messages manually when sending a new message
@@ -146,9 +167,15 @@ export const ChatProvider = ({ children }) => {
             fetchChatSenders,
             clearNotifications,
             refreshMessages,
+            polling,            // ✅ Provide polling state
+            setPolling,         // ✅ Provide function to toggle polling
+            isPollingActive,    // ✅ Include active polling state
+            setIsPollingActive, // ✅ Provide function to toggle polling active state
         }}>
             {children}
         </ChatContext.Provider>
+        
+        
     );
 };
 
