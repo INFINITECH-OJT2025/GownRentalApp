@@ -9,8 +9,8 @@ import { FaTrash } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
-import ChatWidget from "../components/ChatWidget"; 
 import { useWishlist } from "../context/WishlistContext";
+import { toast } from "react-hot-toast";
 
 export default function WishlistPage() {
     const { wishlist, setWishlist } = useWishlist(); // ✅ Correct variable names
@@ -69,7 +69,7 @@ export default function WishlistPage() {
 
     const removeSelectedItems = async () => {
         if (selectedItems.length === 0) {
-            alert("No items selected for deletion.");
+            toast.error("No items selected for deletion.", { position: "top-right" });
             return;
         }
     
@@ -79,7 +79,7 @@ export default function WishlistPage() {
         setIsDeletingSelected(true); // ✅ Start loading state
     
         const token = localStorage.getItem("token");
-        if (!token) return alert("You must be logged in to remove items.");
+        if (!token) return  toast.error("You must be logged in to remove items.", { position: "top-right" });
     
         try {
             await Promise.all(
@@ -92,10 +92,11 @@ export default function WishlistPage() {
     
             setWishlist((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
             setFilteredWishlist((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
-            setSelectedItems([]); // Reset selection
+            setSelectedItems([]); 
+            toast.success(`Deleted ${selectedItems.length} items from wishlist.`, { position: "top-right" });
         } catch (error) {
             console.error("Error removing selected items:", error);
-            alert("Failed to remove selected items.");
+            toast.error("Failed to remove selected items.", { position: "top-right" });
         } finally {
             setIsDeletingSelected(false); // ✅ Stop loading state
         }
@@ -107,7 +108,7 @@ export default function WishlistPage() {
     
         const token = localStorage.getItem("token");
         if (!token) {
-            alert("⚠ You must be logged in to remove wishlist items.");
+            toast.error("You must be logged in to remove wishlist items.", { position: "top-right" });
             return;
         }
     
@@ -123,10 +124,10 @@ export default function WishlistPage() {
             localStorage.setItem("wishlistUpdated", Date.now());
             window.dispatchEvent(new Event("storage"));
     
-            alert("✅ Item removed from wishlist.");
+            toast.success("Item removed from wishlist.", { position: "top-right" });
         } catch (error) {
             console.error("❌ Error removing product:", error);
-            alert(error.response?.data?.message || "❌ An error occurred.");
+            toast.error(error.response?.data?.message || "An error occurred.", { position: "top-right" });
         } finally {
             setDeletingItemId(null); // ✅ Stop loading state
         }
@@ -134,7 +135,7 @@ export default function WishlistPage() {
     
     const removeAllItems = async () => {
         if (wishlist.length === 0) {
-            alert("Wishlist is already empty.");
+            toast.error("Wishlist is already empty.", { position: "top-right" });
             return;
         }
     
@@ -144,8 +145,11 @@ export default function WishlistPage() {
         setIsDeletingAll(true); // ✅ Start loading state
     
         const token = localStorage.getItem("token");
-        if (!token) return alert("You must be logged in to clear your wishlist.");
-    
+        if (!token) {
+            toast.error("You must be logged in to clear your wishlist.", { position: "top-right" });
+        return;
+        }
+
         try {
             const response = await axios.delete("http://127.0.0.1:8000/api/wishlist/clear", {
                 headers: { Authorization: `Bearer ${token}` }
@@ -155,13 +159,13 @@ export default function WishlistPage() {
                 setWishlist([]);
                 setFilteredWishlist([]);
                 setSelectedItems([]);
-                alert("✅ Wishlist cleared successfully!");
+                toast.success("Wishlist cleared successfully.", { position: "top-right" });
             } else {
-                alert("❌ Failed to clear wishlist.");
+                toast.error("Failed to clear wishlist.", { position: "top-right" });
             }
         } catch (error) {
             console.error("Error clearing wishlist:", error);
-            alert("❌ Failed to clear wishlist. Please try again.");
+            toast.error("Failed to clear wishlist. Please try again.", { position: "top-right" });
         } finally {
             setIsDeletingAll(false); // ✅ Stop loading state
         }
@@ -329,7 +333,6 @@ export default function WishlistPage() {
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
             </footer>
         </div>
-        <ChatWidget />
         </AuthGuard>
     );
 }

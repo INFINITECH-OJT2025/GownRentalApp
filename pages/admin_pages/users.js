@@ -6,7 +6,8 @@ import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
 import axios from "axios";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat";
+import { toast } from "react-hot-toast";
+
 
 export default function AdminProfilePage() {
     const router = useRouter();
@@ -140,7 +141,7 @@ const handleImageChange = (e) => {
             if (!token) return;
         
             if (!firstName || !lastName) {
-                alert("⚠ Please fill in First Name and Last Name.");
+                toast.error("Please fill in First Name and Last Name.", { position: "top-right" });
                 setIsSaving(false); // ✅ Stop loading
                 return;
             }
@@ -167,7 +168,7 @@ const handleImageChange = (e) => {
                     },
                 });
         
-                alert("✅ Profile updated successfully!");
+                toast.success("Profile updated successfully!", { position: "top-right" });
         
                 if (response.data.user.image) {
                     setImagePreview(response.data.user.image);
@@ -179,17 +180,17 @@ const handleImageChange = (e) => {
             } catch (err) {
                 if (err.response && err.response.status === 422) {
                     const errors = err.response.data.errors;
-                    let errorMessage = "⚠ Failed to update profile:\n";
+                    let errorMessage = "Failed to update profile:\n";
                     Object.values(errors).forEach((error) => {
                         errorMessage += `• ${error[0]}\n`;
                     });
-                    alert(errorMessage);
+                    toast.error(errorMessage, { position: "top-right" });
                 } else {
                     console.error("Error updating profile:", err);
-                    setError("Failed to update profile.");
+                    toast.error("Failed to update profile. Please try again.", { position: "top-right" });
                 }
             } finally {
-                setIsSaving(false); // ✅ Stop loading state after API call
+                setIsSaving(false); 
             }
         };
         
@@ -221,6 +222,7 @@ const handleImageChange = (e) => {
 
                             {/* ✅ Profile Picture Upload */}
                             <div className="flex flex-col items-center mb-6">
+                            {imagePreview && imagePreview !== "/default-profile.png" ? (
                                 <Image
                                     className="w-32 h-32 rounded-full ring-2 ring-pink-300 object-cover"
                                     src={imagePreview}
@@ -228,6 +230,19 @@ const handleImageChange = (e) => {
                                     width={128}
                                     height={128}
                                 />
+                            ) : (
+                                <div className="w-32 h-32 flex items-center justify-center rounded-full ring-2 ring-pink-300 bg-pink-100">
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                        className="w-16 h-16 text-pink-600"
+                                    >
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4-6c0 2.21-1.79 4-4 4s-4-1.79-4-4h2c0 1.1.9 2 2 2s2-.9 2-2h2zm-6-4c-.83 0-1.5-.67-1.5-1.5S9.17 7 10 7s1.5.67 1.5 1.5S10.83 10 10 10zm4 0c-.83 0-1.5-.67-1.5-1.5S13.17 7 14 7s1.5.67 1.5 1.5S14.83 10 14 10z" />
+                                    </svg>
+                                </div>
+                            )}
+
                                 <div className="mt-4">
                                     <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="fileInput" />
                                     <label
@@ -291,7 +306,6 @@ const handleImageChange = (e) => {
                     </main>
                 </div>
             </div>
-            <ChatWidgetPage />
         </>
     );
 }

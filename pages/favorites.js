@@ -9,8 +9,8 @@ import { FaTrash } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
-import ChatWidget from "../components/ChatWidget"; 
 import { useFavorites } from "../context/FavoritesContext"; // ✅ Import Favorites Context
+import { toast } from "react-hot-toast";
 
 export default function FavoritesPage() {
     const { favorites, setFavorites } = useFavorites(); // ✅ Correct use of context hook
@@ -70,7 +70,7 @@ export default function FavoritesPage() {
     
         const token = localStorage.getItem("token");
         if (!token) {
-            alert("⚠ You must be logged in to remove favorites.");
+            toast.error("⚠ You must be logged in to remove favorites.", { position: "top-right" });
             return;
         }
     
@@ -84,10 +84,10 @@ export default function FavoritesPage() {
             setFavorites((prev) => prev.filter(item => item.product.id !== productId));
             setFilteredFavorites((prev) => prev.filter(item => item.product.id !== productId));
     
-            alert("✅ Item removed from favorites.");
+            toast.success("Item removed from favorites.", { position: "top-right" });
         } catch (error) {
             console.error("❌ Error removing product:", error);
-            alert(error.response?.data?.message || "❌ An error occurred.");
+            toast.error(error.response?.data?.message || "An error occurred.", { position: "top-right" });
         } finally {
             setDeletingItemId(null); // ✅ Stop loading state
         }
@@ -96,7 +96,7 @@ export default function FavoritesPage() {
 
     const removeSelectedItems = async () => {
         if (selectedItems.length === 0) {
-            alert("No items selected for deletion.");
+            toast.error("No items selected for deletion.", { position: "top-right" });
             return;
         }
     
@@ -106,7 +106,7 @@ export default function FavoritesPage() {
         setIsDeletingSelected(true); // ✅ Start loading state
     
         const token = localStorage.getItem("token");
-        if (!token) return alert("You must be logged in to remove items.");
+        if (!token) return toast.error("⚠ You must be logged in to remove items.", { position: "top-right" });
     
         try {
             await Promise.all(
@@ -120,9 +120,11 @@ export default function FavoritesPage() {
             setFavorites((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
             setFilteredFavorites((prev) => prev.filter(item => !selectedItems.includes(item.product.id)));
             setSelectedItems([]); // Reset selection
+
+            toast.success(`Deleted ${selectedItems.length} items successfully.`, { position: "top-right" });
         } catch (error) {
             console.error("Error removing selected items:", error);
-            alert("Failed to remove selected items.");
+            toast.error("Failed to remove selected items.", { position: "top-right" });
         } finally {
             setIsDeletingSelected(false); // ✅ Stop loading state
         }
@@ -130,7 +132,7 @@ export default function FavoritesPage() {
     
     const removeAllItems = async () => {
         if (favorites.length === 0) {
-            alert("Favorites list is already empty.");
+            toast.error("Favorites list is already empty.", { position: "top-right" });
             return;
         }
     
@@ -140,7 +142,7 @@ export default function FavoritesPage() {
         setIsDeletingAll(true); // ✅ Start loading state
     
         const token = localStorage.getItem("token");
-        if (!token) return alert("You must be logged in to clear your favorites.");
+        if (!token) return  toast.error("You must be logged in to clear your favorites.", { position: "top-right" });
     
         try {
             await axios.delete("http://127.0.0.1:8000/api/favorites/clear", {
@@ -150,9 +152,10 @@ export default function FavoritesPage() {
             setFavorites([]);
             setFilteredFavorites([]);
             setSelectedItems([]);
+            toast.success("All favorites cleared successfully.", { position: "top-right" });
         } catch (error) {
             console.error("Error clearing favorites:", error);
-            alert("Failed to clear favorites.");
+            toast.error("Failed to clear favorites.", { position: "top-right" });
         } finally {
             setIsDeletingAll(false); // ✅ Stop loading state
         }
@@ -318,7 +321,6 @@ export default function FavoritesPage() {
             {/* Footer now sticks to the bottom */}
             <footer className="bg-pink-600 text-white text-center py-6 mt-auto">
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-                 <ChatWidget />
             </footer>
         </div>
         

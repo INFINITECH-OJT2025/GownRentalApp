@@ -6,7 +6,7 @@ import AdminSidebar from "../../components/AdminSidebar";
 import { Bar } from "react-chartjs-2";
 import Image from "next/image";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat"; 
+import { HiUsers, HiCube, HiClipboardList, HiCurrencyDollar, HiClock, HiCheckCircle } from "react-icons/hi"; 
 
 import {
     Chart as ChartJS,
@@ -71,12 +71,18 @@ export default function AnalyticsPage() {
             {
                 label: `Bookings Per Month in ${selectedYear}`,
                 data: filteredBookings.length > 0 ? filteredBookings.map(item => item.count) : [0], // ✅ Prevents NaN
-                backgroundColor: "#007C3D",
-                borderColor: "#004D1A",
+                backgroundColor: [
+                    "#FF69B4", // Hot Pink
+                    "#FF1493", // Deep Pink
+                    "#DB7093", // Pale Violet Red
+                    "#C71585", // Medium Violet Red
+                ],
+                borderColor: "#C71585",
                 borderWidth: 1,
             },
         ],
     };
+    
 
     return (
         <>
@@ -132,20 +138,23 @@ export default function AnalyticsPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {stats && [
-                            { title: "Total Users", value: stats.users },
-                            { title: "Total Products", value: stats.products },
-                            { title: "Total Bookings (pending, canceled, picked up, & returned)", value: stats.bookings },
-                            { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}` },
-                            { title: "Pending Bookings", value: stats.pendingBookings },
-                            { title: "Completed Bookings (returned)", value: stats.completedBookings },
+                    {stats &&
+                        [
+                            { title: "Total Users", value: stats.users, icon: <HiUsers className="text-5xl text-pink-600" /> },
+                            { title: "Total Products", value: stats.products, icon: <HiCube className="text-5xl text-pink-600" /> },
+                            { title: "Total Bookings (pending, canceled, picked up, & returned)", value: stats.bookings, icon: <HiClipboardList className="text-5xl text-pink-600" /> },
+                            { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}`, icon: <HiCurrencyDollar className="text-5xl text-pink-600" /> },
+                            { title: "Pending Bookings", value: stats.pendingBookings, icon: <HiClock className="text-5xl text-pink-600" /> },
+                            { title: "Completed Bookings (returned)", value: stats.completedBookings, icon: <HiCheckCircle className="text-5xl text-pink-600" /> },
                         ].map((item, index) => (
-                            <div key={index} className="bg-white p-6 rounded-lg shadow-md">
-                                <h2 className="text-lg font-semibold text-gray-700">{item.title}</h2>
+                            <div key={index} className="bg-pink-100 shadow-md p-6 rounded-lg flex flex-col items-center">
+                                {item.icon} {/* Icon Centered */}
+                                <h2 className="text-lg font-semibold text-gray-700 text-center mt-2">{item.title}</h2>
                                 <p className="text-2xl font-bold">{item.value}</p>
                             </div>
-                        ))}
-                    </div>
+                        ))
+                    }
+                </div>
 
                     {/* 📊 Bar Chart */}
                     <div className="bg-white p-6 rounded-lg shadow-md mt-8">
@@ -155,7 +164,6 @@ export default function AnalyticsPage() {
                 </main>
             </div>
         </div>
-        <ChatWidgetPage />
         </>
     );
 }

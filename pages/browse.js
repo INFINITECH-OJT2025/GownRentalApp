@@ -6,20 +6,23 @@ import Calendar from "react-calendar";
 import AuthGuard from "../components/AuthGuard";
 import "react-calendar/dist/Calendar.css";
 import Link from "next/link";
-import { FaHeart, FaStar } from "react-icons/fa";
+import { FaHeart, FaStar, FaSpinner } from "react-icons/fa";
 import axios from "axios";
 import Navbar from "../components/Navbar"; // Adjust path if needed
 import Head from "next/head";
 import { useWishlist } from "../context/WishlistContext";
 import { useFavorites } from "../context/FavoritesContext";
-import ChatWidget from "../components/ChatWidget"; 
-import { Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
 export default function BrowsePage() {
     const [discountGroups, setDiscountGroups] = useState({});
     const [isOpen, setIsOpen] = useState(false);
     const { setFavorites, addToFavorites, favorites } = useFavorites(); // ✅ Use Favorites Context
     const [loadingButton, setLoadingButton] = useState(null); // ✅ Track loading state for buttons
+
+    const [loadingWishlist, setLoadingWishlist] = useState(null);
+    const [loadingFavorites, setLoadingFavorites] = useState(null);
+
 
     // State to control the calendar visibility for each gown
     const [calendarOpen, setCalendarOpen] = useState({});
@@ -240,9 +243,8 @@ export default function BrowsePage() {
 
     return (
          <AuthGuard>
-            <Toaster /> 
             <Head>
-                <title>Browse | Gown Rental</title> {/* ✅ Dynamic Title */}
+                <title>Home | Gown Rental</title> {/* ✅ Dynamic Title */}
                 <meta name="description" content="Manage your profile and settings on Gown Rental." />
                 <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
             </Head>
@@ -415,40 +417,79 @@ export default function BrowsePage() {
                                         </div>
 
                                         {/* Book Button (Click redirects to product page) */}
-                                        <Link href={`/products/${product.id}`}>
                                         <button 
-                                            onClick={() => setLoadingButton(`book-${product.id}`)}
+                                            onClick={() => {
+                                                toast.success("Redirecting to product page...", {
+                                                    duration: 3000,
+                                                    position: "top-right",
+                                                });
+                                                setLoadingButton(`book-${product.id}`);
+                                                setTimeout(() => {
+                                                    window.location.href = `/products/${product.id}`;
+                                                }, 1000); // Short delay before redirect
+                                            }}
                                             disabled={loadingButton === `book-${product.id}`}
                                             className={`w-full mt-3 md:mt-4 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-2 px-4 md:px-6 rounded-lg shadow-md transition
                                                 ${loadingButton === `book-${product.id}` ? "opacity-50 cursor-not-allowed" : ""}`}
                                         >
                                             {loadingButton === `book-${product.id}` ? "Loading..." : "Book"}
                                         </button>
-                                    </Link>
 
 
                                         {/* Wishlist & Favorite Icons (No Redirect) */}
                                         <div className="flex justify-center space-x-4 mt-3 md:mt-4">
                                         
                                             {/* Wishlist Icon */}
-                                            <button onClick={() => addToWishlist(product.id)} className="relative group">
-                                    <FaHeart 
-                                        className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                    />
-                                    <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
-                                        {wishlist.includes(product.id) ? "Already in Wishlist" : "Add to Wishlist"}
-                                    </div>
-                                </button>
+                                            <button 
+                                                onClick={async () => {
+                                                    setLoadingWishlist(product.id); // Start loading
+                                                    await addToWishlist(product.id);
+                                                    setLoadingWishlist(null); // Stop loading
+                                                }} 
+                                                className="relative group"
+                                                disabled={loadingWishlist === product.id}
+                                            >
+                                                {loadingWishlist === product.id ? (
+                                                    <FaSpinner className="text-pink-600 text-2xl animate-spin" /> // **Proper loading icon**
+                                                ) : (
+                                                    <>
+                                                        <FaHeart 
+                                                            className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                                        />
+                                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
+                                                            {wishlist.includes(product.id) ? "Added to Wishlist" : "Add to Wishlist"}
+                                                            <div className="tooltip-arrow" data-popper-arrow></div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </button>
+
+
 
                                        {/* Favorite Icon */} 
-                                       <button onClick={() => addToFavorites(product.id)} className="relative group">
-                                        <FaStar 
-                                            className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                        />
-                                        <div className="absolute z-10 left-1/2 transform -translate-x-1/2 bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-md">
-                                            {favorites.includes(product.id) ? "Already in Favorites" : "Add to Favorites"}
-                                        </div>
-                                    </button>
+                                       <button 
+                                            onClick={async () => {
+                                                setLoadingFavorites(product.id); // Start loading
+                                                await addToFavorites(product.id);
+                                                setLoadingFavorites(null); // Stop loading
+                                            }} 
+                                            className="relative group"
+                                            disabled={loadingFavorites === product.id}
+                                        >
+                                            {loadingFavorites === product.id ? (
+                                                <FaSpinner className="text-yellow-500 text-2xl animate-spin" /> // **Proper loading icon**
+                                            ) : (
+                                                <>
+                                                    <FaStar 
+                                                        className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
+                                                    />
+                                                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
+                                                        {favorites.includes(product.id) ? "Added to Favorites" : "Add to Favorites"}
+                                                        <div className="tooltip-arrow" data-popper-arrow></div>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </button>
                                         
                                         </div>
                                     </div>
@@ -483,7 +524,6 @@ export default function BrowsePage() {
                 {/* Footer */}
                 <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-                <ChatWidget />
                 </footer>
             </div>
         </AuthGuard>

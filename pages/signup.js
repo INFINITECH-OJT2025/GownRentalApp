@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation"; // Next.js 13+ navigation
 import Image from "next/image";
 import axios from "axios";
+import { toast } from "react-hot-toast";
+
 
 export default function SignupPage() {
     const router = useRouter();
@@ -30,7 +32,10 @@ export default function SignupPage() {
         setSuccess(null);
     
         if (formData.password !== formData.password_confirmation) {
-            setError("Passwords do not match!");
+            toast.error("Passwords do not match!", {
+                duration: 3000,
+                position: "top-right",
+            });            
             setLoading(false);
             return;
         }
@@ -39,7 +44,10 @@ export default function SignupPage() {
             const response = await axios.post("http://127.0.0.1:8000/api/register", formData);
             localStorage.setItem("token", response.data.token);
     
-            setSuccess("You have been successfully signed up! Now you may log in.");
+            toast.success("You have been successfully signed up! Now you may log in.", {
+                duration: 3000,
+                position: "top-right",
+            });
             
             // Redirect to login after 3 seconds
             setTimeout(() => {
@@ -48,9 +56,17 @@ export default function SignupPage() {
         } catch (err) {
             // ✅ Handle duplicate email error
             if (err.response?.data?.error === "This email is already registered. Try logging in instead.") {
-                setError("This email is already registered. Please log in instead.");
+                toast.error("This email is already registered. Please log in instead.", {
+                    duration: 3000,
+                    position: "top-right",
+                });
+                
             } else {
-                setError(err.response?.data?.error || "Something went wrong.");
+                toast.error(err.response?.data?.error || "Something went wrong.", {
+                    duration: 3000,
+                    position: "top-right",
+                });
+                
             }
         } finally {
             setLoading(false);

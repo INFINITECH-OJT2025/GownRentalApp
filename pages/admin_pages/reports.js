@@ -7,8 +7,9 @@ import DataTable from "react-data-table-component";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Head from "next/head";
-import Papa from "papaparse"; // ✅ Import PapaParse for CSV export
-import ChatWidgetPage from "../../components/chat"; 
+import Papa from "papaparse";
+import { toast } from "react-hot-toast";
+
 
 export default function BookingReports() {
     const router = useRouter();
@@ -39,13 +40,14 @@ export default function BookingReports() {
             "Reference No.": booking.reference_number,
             "User": booking.user_name,
             "Product": booking.product_name,
+            "Size": booking.sizes,
             "Start Date": formatDate(booking.start_date),
             "End Date": formatDate(booking.end_date),
             "Created Date": formatDate(booking.created_at),
+            "Total Price": formatCurrency(booking.total_price),
+            "Discounted / Price": formatCurrency(booking.discounted_price),
             "Added Price": formatCurrency(booking.added_price),
             "Voucher Fee": formatCurrency(booking.voucher_fee),
-            "Discounted Price": formatCurrency(booking.discounted_price),
-            "Total Price": formatCurrency(booking.total_price),
             "Status": booking.status
         }));
     
@@ -60,6 +62,8 @@ export default function BookingReports() {
         link.click();
         document.body.removeChild(link);
     
+        toast.success("CSV file exported successfully!", { position: "top-right" });
+
         setTimeout(() => setIsExportingCSV(false), 1000); // Simulate loading state
     };
     
@@ -89,35 +93,37 @@ export default function BookingReports() {
         autoTable(doc, {
             startY: 35,
             head: [[
-                "Ref No.", "User", "Product", "Start Date", "End Date", "Created Date",
-                "Added Price", "Voucher Fee", "Discounted Price", "Total Price", "Status"
+                "Ref No.", "User", "Product", "Size", "Start Date", "End Date", "Created Date","Total Price","Discounted / Price",
+                "Added Price", "Voucher Fee", "Status"
             ]],
             body: filteredBookings.map(booking => [
                 booking.reference_number,
                 booking.user_name,
                 booking.product_name,
+                booking.sizes,
                 formatDate(booking.start_date),
                 formatDate(booking.end_date),
                 formatDate(booking.created_at),
+                formatCurrency(booking.total_price),
+                formatCurrency(booking.discounted_price),
                 formatCurrency(booking.added_price),
                 formatCurrency(booking.voucher_fee),
-                formatCurrency(booking.discounted_price),
-                formatCurrency(booking.total_price),
                 booking.status
             ]),
 
             styles: { fontSize: 7, cellPadding: 1 }, // ✅ Smaller font
             headStyles: { fillColor: [255, 105, 180], textColor: [255, 255, 255], fontSize: 8 }, // ✅ Bold pink header
             columnStyles: {
-                0: { cellWidth: 15 },  
+                0: { cellWidth: 12 },  
                 1: { cellWidth: 22 },  
-                2: { cellWidth: 15 },  
-                3: { cellWidth: 17, halign: "center" }, 
+                2: { cellWidth: 13 },  
+                3: { cellWidth: 10 },
                 4: { cellWidth: 17, halign: "center" }, 
-                5: { cellWidth: 17, halign: "center" },  
+                5: { cellWidth: 17, halign: "center" }, 
                 6: { cellWidth: 17, halign: "center" },  
-                7: { cellWidth: 15, halign: "center" },  
-                8: { cellWidth: 15, halign: "center" }  
+                7: { cellWidth: 17, halign: "center" },  
+                8: { cellWidth: 15, halign: "center" },  
+                9: { cellWidth: 15, halign: "center" }  
             },
             theme: "grid",
             didDrawPage: function (data) {
@@ -134,6 +140,8 @@ export default function BookingReports() {
 
         setTimeout(() => setIsExportingPDF(false), 1000); 
     
+        toast.success("PDF file exported successfully!", { position: "top-right" });
+
         // ✅ Save PDF
         doc.save(`Booking_Reports_${format(new Date(), "yyyy-MM-dd")}.pdf`);
     };
@@ -186,41 +194,50 @@ export default function BookingReports() {
     
             const data = await response.json();
     
-            const bookingsWithNames = data.bookings.map(booking => ({
+            const bookingsWithNamesAndSizes = data.bookings.map(booking => ({
                 ...booking,
                 created_at: booking.created_at ? booking.created_at : new Date().toISOString(), // ✅ Default to current date if missing
                 user_name: booking.user ? booking.user.name : "Unknown User",
                 product_name: booking.product ? booking.product.name : "Unknown Product",
+                sizes: booking.sizes ?? "N/A",
             }));
     
-            setBookings(bookingsWithNames);
-            setFilteredBookings(bookingsWithNames);
+            setBookings(bookingsWithNamesAndSizes);
+            setFilteredBookings(bookingsWithNamesAndSizes);
         } catch (error) {
             console.error("❌ Error fetching bookings:", error);
         }
     };
     
     const handleFilter = () => {
+        toast.success("Applied filters...", { position: "top-right" });
+
         if (!startDate) return; // ✅ Ensure a date is selected before filtering
     
         console.log("Raw created_at values:", bookings.map(b => b.created_at)); // ✅ Debugging log
     
         const filteredData = bookings.filter((booking) => {
-            if (!booking.created_at) return false; // ✅ Skip invalid dates
+            if (!booking.created_at) return false;
     
             const createdAt = new Date(booking.created_at);
-            if (isNaN(createdAt)) return false; // ✅ Handle invalid dates safely
+            if (isNaN(createdAt)) return false; 
     
-            return createdAt.toISOString().split("T")[0] === startDate; // ✅ Match exact date
+            return createdAt.toISOString().split("T")[0] === startDate;
         });
     
         setFilteredBookings(filteredData);
     };
     
     const columns = [
-        { name: "Ref No.", selector: (row) => row.reference_number ?? "N/A", sortable: true },
-        { name: "User", selector: (row) => row.user_name ?? "Unknown User", sortable: true },
-        { name: "Product", selector: (row) => row.product_name ?? "Unknown Product", sortable: true },
+        { name: "Ref No.", selector: (row) => row.reference_number ?? "N/A", sortable: true, width: "150px" },
+        { name: "User", selector: (row) => row.user_name ?? "Unknown User", sortable: true, width: "150px" },
+        { name: "Product", selector: (row) => row.product_name ?? "Unknown Product", sortable: true, width: "150px" },
+        {
+            name: "Size", 
+            selector: (row) => row.sizes ?? "N/A",
+            sortable: true,
+        },
+
         {
             name: "Start Date",
             selector: row => formatDate(row.start_date),
@@ -230,6 +247,16 @@ export default function BookingReports() {
             name: "End Date",
             selector: row => formatDate(row.end_date),
             sortable: true,
+        },
+        {
+            name: "Total Price",
+            selector: row => formatCurrency(row.total_price),
+            sortable: true,
+        },
+        { 
+            name: "Discounted / Price", // ✅ Newly added column
+            selector: row => formatCurrency(row.discounted_price),
+            sortable: true 
         },
         { 
             name: "Added Price", 
@@ -241,20 +268,10 @@ export default function BookingReports() {
             selector: row => formatCurrency(row.voucher_fee),
             sortable: true 
         },
-        { 
-            name: "Discounted Price", // ✅ Newly added column
-            selector: row => formatCurrency(row.discounted_price),
-            sortable: true 
-        },
-        {
-            name: "Total Price",
-            selector: row => formatCurrency(row.total_price),
-            sortable: true,
-        },
         {
             name: "Status",
             selector: (row) => row.status ?? "N/A",
-            sortable: true,
+            sortable: true, width: "150px",
             cell: (row) => (
                 <span
                     className={`px-4 py-1 text-white text-xs font-medium text-center rounded-full inline-block w-auto min-w-[50px] mx-auto flex justify-center
@@ -278,13 +295,13 @@ export default function BookingReports() {
         <div className={`${darkMode ? "dark" : ""} flex h-screen bg-white dark:bg-[#0F172A]`}>
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
+            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"} w-full overflow-x-hidden`}>
                 <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
                     <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental - Reports</h1>
                 </header>
 
                 <main className="p-6 mt-16">
-                <div className="flex gap-4 mb-4 items-center">
+                <div className="flex flex-wrap gap-4 mb-4 items-center">
                     <span className="font-semibold">Booking Created Date:</span>
                     <input 
                         type="date" 
@@ -315,22 +332,25 @@ export default function BookingReports() {
 
                 </div>
 
-                    <div className="bg-white dark:bg-[#1E293B] p-6 rounded-lg shadow-md">
-                        <h2 className="text-xl font-semibold dark:text-white mb-4">Booking Reports</h2>
-                        <DataTable
-                            columns={columns}
-                            data={filteredBookings}
-                            pagination
-                            highlightOnHover
-                            striped
-                            theme={darkMode ? "dark" : "light"}
-                        />
-                    </div>
+                <div className="w-full bg-white dark:bg-[#1E293B] p-6 rounded-lg shadow-md overflow-hidden">
+                <div className="overflow-x-auto"> {/* ✅ Ensure table expands fully while allowing scroll */}
+                    <h2 className="text-xl font-semibold dark:text-white mb-4">Booking Reports</h2>
+                    <DataTable
+                        columns={columns}
+                        data={filteredBookings}
+                        pagination
+                        highlightOnHover
+                        striped
+                        className="w-full min-w-full" // ✅ Ensures table uses full width
+                        theme={darkMode ? "dark" : "light"}
+                    />
+                </div>
+            </div>
+
                 </main>
             </div>
             
         </div>
-         <ChatWidgetPage />
           </>
     );
 }

@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation"; // ✅ Import search params
+import { useSearchParams } from "next/navigation";
 
 export default function Sidebar() {
     const searchParams = useSearchParams();
-    const section = searchParams.get("section") || "public"; // ✅ Get section from URL
+    const section = searchParams.get("section") || "public";
 
     return (
-        <aside className="w-full md:w-1/4 lg:w-1/5 hidden md:block">
+        <aside className="hidden md:block w-full md:w-1/4 lg:w-1/5">
             <div className="sticky top-40 flex flex-col space-y-3 border-r pr-6 text-gray-700">
                 <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
 
-                {/* ✅ Sidebar Links with Proper Styling */}
+                {/* ✅ Sidebar Navigation Links */}
                 <Link
                     href="/profile?section=public"
                     className={`px-4 py-2 rounded-lg border transition duration-300 ${
@@ -23,6 +23,7 @@ export default function Sidebar() {
                 >
                     Public Profile
                 </Link>
+
                 <Link
                     href="/profile?section=loyalty"
                     className={`px-4 py-2 rounded-lg border transition duration-300 ${

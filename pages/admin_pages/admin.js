@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat";
 import { toast, Toaster } from "react-hot-toast";
+import { HiUsers, HiCube, HiCurrencyDollar, HiHeart, HiStar } from "react-icons/hi";
 
 export default function AdminDashboard() {
     const router = useRouter();
@@ -33,8 +33,7 @@ export default function AdminDashboard() {
         const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
         const startIndex = (currentPage - 1) * itemsPerPage;
         const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
-
-
+        
         const fetchProducts = async () => {
             try {
                 const response = await fetch("http://127.0.0.1:8000/api/products", {
@@ -52,12 +51,18 @@ export default function AdminDashboard() {
                 console.log("📡 API Response (Products):", data);
         
                 if (data.success && Array.isArray(data.data)) {
-                    const formattedProducts = await Promise.all(
+                    // ✅ Fetch approved bookings, wishlist, and favorite counts for each product
+                    const updatedProducts = await Promise.all(
                         data.data.map(async (product) => {
-                            const approvedBookings = await fetchApprovedBookingCount(product.id); // ✅ Fetch approved bookings
+                            const approvedBookings = await fetchApprovedBookingCount(product.id);
+                            const wishlistCount = await fetchWishlistCount(product.id);
+                            const favoriteCount = await fetchFavoriteCount(product.id);
+        
                             return {
                                 ...product,
-                                approved_bookings: approvedBookings,
+                                approved_bookings: approvedBookings, // ✅ Add approved bookings count
+                                wishlist_count: wishlistCount, // ✅ Add wishlist count
+                                favorite_count: favoriteCount, // ✅ Add favorite count
                                 image_url: product.image_url.startsWith("http")
                                     ? product.image_url
                                     : `http://127.0.0.1:8000/storage/${product.image}`
@@ -65,8 +70,8 @@ export default function AdminDashboard() {
                         })
                     );
         
-                    setProducts([...formattedProducts]);
-                    console.log("Updated Products State:", formattedProducts);
+                    setProducts([...updatedProducts]);
+                    console.log("Updated Products State:", updatedProducts);
                 } else {
                     alert("⚠ Unexpected API response format. Please try again later.");
                 }
@@ -75,7 +80,52 @@ export default function AdminDashboard() {
                 alert("⚠ Unable to fetch products. Please check your internet connection or try again later.");
             }
         };
+
+        const fetchWishlistCount = async (productId) => {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/product/${productId}/wishlist-count`, {
+                    headers: {
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+                        "Accept": "application/json"
+                    }
+                });
         
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+        
+                const data = await response.json();
+                console.log(`📡 Wishlist Count for Product ${productId}:`, data);
+        
+                return data.wishlist_count || 0; // ✅ Ensure count is correct
+            } catch (error) {
+                console.error(`❌ Error fetching wishlist count for product ${productId}:`, error);
+                return 0; // ✅ Return 0 instead of crashing the app
+            }
+        };
+        
+        const fetchFavoriteCount = async (productId) => {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/product/${productId}/favorite-count`, {
+                    headers: {
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+                        "Accept": "application/json"
+                    }
+                });
+        
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+        
+                const data = await response.json();
+                console.log(`📡 Favorite Count for Product ${productId}:`, data);
+        
+                return data.favorite_count || 0; // ✅ Ensure count is correct
+            } catch (error) {
+                console.error(`❌ Error fetching favorite count for product ${productId}:`, error);
+                return 0; // ✅ Return 0 instead of crashing the app
+            }
+        };        
         
         const fetchApprovedBookingCount = async (productId) => {
             try {
@@ -91,18 +141,15 @@ export default function AdminDashboard() {
                 }
         
                 const data = await response.json();
-                console.log(`📡 API Response for product ${productId}:`, data);
+                console.log(`📡 Approved Bookings for Product ${productId}:`, data);
         
                 return data.approved_bookings || 0; // ✅ Ensure count is correct
             } catch (error) {
                 console.error(`❌ Error fetching approved bookings for product ${productId}:`, error);
-                
-                // ✅ Show a user-friendly Windows-style alert
-                alert(`⚠ Unable to fetch approved bookings for product ${productId}. Please check your internet connection or try again later.`);
-                
                 return 0; // ✅ Return 0 instead of crashing the app
             }
         };
+        
         
         useEffect(() => {
             const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -160,7 +207,7 @@ export default function AdminDashboard() {
                 <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
                 <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
-                    <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
+                <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-0">
                         <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
                     </header>
 
@@ -189,18 +236,17 @@ export default function AdminDashboard() {
                         </nav>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="bg-white p-6 rounded-lg shadow-md flex flex-col items-center text-center">
-                                <h2 className="text-xl font-bold">Total Users</h2>
-                                <p>{stats.users}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-lg shadow-md flex flex-col items-center text-center">
-                                <h2 className="text-xl font-bold">Total Products</h2>
-                                <p>{stats.products}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-lg shadow-md flex flex-col items-center text-center">
-                                <h2 className="text-xl font-bold">Total Revenue</h2>
-                                <p>₱{Number(stats.totalRevenue || 0).toLocaleString("en-PH")}</p>
-                            </div>
+                            {[
+                                { title: "Total Users", value: stats.users, icon: <HiUsers className="text-5xl text-pink-600" /> },
+                                { title: "Total Products", value: stats.products, icon: <HiCube className="text-5xl text-pink-600" /> },
+                                { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}`, icon: <HiCurrencyDollar className="text-5xl text-pink-600" /> },
+                            ].map((item, index) => (
+                                <div key={index} className="bg-pink-100 shadow-md p-6 rounded-lg flex flex-col items-center">
+                                    {item.icon} {/* Icon Centered */}
+                                    <h2 className="text-xl font-bold text-gray-700 text-center mt-2">{item.title}</h2>
+                                    <p className="text-2xl font-bold">{item.value}</p>
+                                </div>
+                            ))}
                         </div>
 
                         {/* Available Gowns Section */}
@@ -255,6 +301,30 @@ export default function AdminDashboard() {
                                             <p className={`text-lg font-bold ${product.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
                                                 {product.stock_status}
                                             </p>
+
+                                            <div className="flex items-center space-x-4">
+                                                {/* Wishlist Count with Tooltip */}
+                                                <div className="relative group flex items-center space-x-1">
+                                                    <HiHeart className="text-red-500 text-2xl" />
+                                                    <span className="text-lg font-semibold text-gray-600">{product.wishlist_count}</span>
+                                                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
+                                                        This is the total times this product was added to wishlists.
+                                                        <div className="tooltip-arrow" data-popper-arrow></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Favorite Count with Tooltip */}
+                                                <div className="relative group flex items-center space-x-1">
+                                                    <HiStar className="text-yellow-500 text-2xl" />
+                                                    <span className="text-lg font-semibold text-gray-600">{product.favorite_count}</span>
+                                                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
+                                                        This is the total times this product was favorited.
+                                                        <div className="tooltip-arrow" data-popper-arrow></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+
                                         </div>
                                         
                                     ))
@@ -290,7 +360,6 @@ export default function AdminDashboard() {
                     </main>
                 </div>
             </div>
-            <ChatWidgetPage />
         </>
     );
 }

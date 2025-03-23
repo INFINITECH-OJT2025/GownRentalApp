@@ -4,7 +4,6 @@ import { useState } from "react";
 import AuthGuard from "../components/AuthGuard";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
-import ChatWidget from "../components/ChatWidget";
 import axios from "axios";
 import { toast, Toaster } from "react-hot-toast";
 
@@ -64,7 +63,7 @@ export default function ContactPage() {
                     <h1 className="text-5xl font-bold text-white drop-shadow-lg mt-6">
                         Contact <span className="text-pink-700">Us</span>
                     </h1>
-                    <p className="mt-4 text-lg text-white max-w-2xl mx-auto">
+                    <p className="mt-4 text-lg text-pink-900 max-w-2xl mx-auto [text-shadow:2px_2px_0px_black,-2px_-2px_0px_black,2px_-2px_0px_black,-2px_2px_0px_black]">
                         Have a question? Get in touch with us! We’d love to hear from you.
                     </p>
                 </section>
@@ -140,7 +139,6 @@ export default function ContactPage() {
 
                 <footer className="bg-pink-700 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-                    <ChatWidget />
                 </footer>
             </div>
         </AuthGuard>

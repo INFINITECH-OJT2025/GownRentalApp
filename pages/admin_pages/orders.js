@@ -6,7 +6,7 @@ import AdminSidebar from "../../components/AdminSidebar";
 import DataTable from "react-data-table-component";
 import { Filter, CalendarCheck, Hourglass, Ban, RefreshCw } from "lucide-react";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat"; 
+import { toast } from "react-hot-toast";
 // import ScheduleCalendar from "./calendar";
 
 export default function OrdersPage() {
@@ -84,7 +84,7 @@ export default function OrdersPage() {
     };
 
     const updateStatusCounts = (allOrders) => {
-        const counts = { approved: 0, pending: 0, picked_up: 0, canceled: 0, returned: 0 };
+        const counts = { all: allOrders.length, approved: 0, pending: 0, picked_up: 0, canceled: 0, returned: 0 };
     
         allOrders.forEach((order) => {
             const normalizedStatus = order.status.toLowerCase().replace(" ", "_"); // ✅ Normalize "picked up" to "picked_up"
@@ -95,6 +95,7 @@ export default function OrdersPage() {
     
         setStatusCounts(counts);
     };
+    
     
     const handleStatusChange = async (id, newStatus) => {
         setIsUpdatingStatus((prev) => ({ ...prev, [id]: true })); // ✅ Start loading for this order
@@ -126,15 +127,15 @@ export default function OrdersPage() {
     
             if (response.data.success) {
                 console.log("Order updated successfully:", response.data);
-                alert(`Order ${id} status updated to: ${newStatus}`);
+                toast.success(`Order ${orders.find(o => o.id === id)?.reference_number || "N/A"} updated to: ${newStatus}`, { position: "top-right" });
                 fetchOrders(); // ✅ Refresh orders after update
             } else {
                 console.error("API responded with an error:", response.data);
-                alert("Failed to update order. Server response: " + response.data.message);
+                toast.error(`Failed to update order ${orders.find(o => o.id === id)?.reference_number || "N/A"}: ${response.data.message}`, { position: "top-right" });
             }
         } catch (error) {
             console.error("Error updating status:", error.response?.data || error);
-            alert("Error updating status. Please try again.");
+            toast.error(`⚠️ Error updating order ${orders.find(o => o.id === id)?.reference_number || "N/A"}. Please try again.`, { position: "top-right" });
         } finally {
             setIsUpdatingStatus((prev) => ({ ...prev, [id]: false })); // ✅ Stop loading
         }
@@ -154,28 +155,40 @@ export default function OrdersPage() {
         }
     };
     
+    const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
+        const date = new Date(dateString);
+        return date.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).replace(/ /g, "-"); // ✅ Convert spaces to dashes
+    };
+
+    
     const columns = [
-        { name: "Reference No.", selector: (row) => row.reference_number, sortable: true },
-        { name: "User Name", selector: (row) => row.user_name, sortable: true },
-        { name: "Address", selector: (row) => row.user_address, sortable: true },
-        { name: "Product Name", selector: (row) => row.product_name, sortable: true },
-        { name: "Start Date", selector: (row) => row.start_date, sortable: true },
-        { name: "End Date", selector: (row) => row.end_date, sortable: true },
+        
+        { name: "Reference No.", selector: (row) => row.reference_number, sortable: true, width: "150px" },
+        { name: "User Name", selector: (row) => row.user_name, sortable: true, width: "180px" }, 
+
+        // Increase column width for Address
+        { name: "Address", selector: (row) => row.user_address, sortable: true, width: "280px" }, 
+        
+        // Increase column width for Product Name
+        { name: "Product Name", selector: (row) => row.product_name, sortable: true, width: "140px" }, 
+        { name: "Selected Size", selector: (row) => row.sizes || "N/A", sortable: true, width: "150px" },
+
+        { name: "Start Date", selector: (row) => formatDate(row.start_date), sortable: true },
+        { name: "End Date", selector: (row) => formatDate(row.end_date), sortable: true },
         { name: "Total Price", selector: (row) => `₱${row.total_price}`, sortable: true },
         
         // ✅ NEW COLUMNS ADDED
-        { name: "Discounted Price", selector: (row) => `₱${row.discounted_price || "0.00"}`, sortable: true },
-        { name: "Voucher Fee", selector: (row) => `₱${row.voucher_fee || "0.00"}`, sortable: true },
-        { name: "Added Price", selector: (row) => `₱${row.added_price || "0.00"}`, sortable: true },
+        { name: "Discounted / Price", selector: (row) => `₱${row.discounted_price || "0.00"}`, sortable: true, width: "150px" },
+        { name: "Voucher Fee", selector: (row) => `₱${row.voucher_fee || "0.00"}`, sortable: true, width: "150px" },
+        { name: "Added Price", selector: (row) => `₱${row.added_price || "0.00"}`, sortable: true, width: "150px" },
     
-        { 
-            name: "Booked Date", 
-            selector: (row) => row.created_at ? new Date(row.created_at).toLocaleDateString("en-US", { 
-                year: "numeric", month: "short", day: "numeric"
-            }) : "N/A", 
-            sortable: true 
-        },
-    
+        { name: "Booked Date", selector: (row) => formatDate(row.created_at), sortable: true },
+
         {
             name: "GCash Receipt",
             cell: (row) => {
@@ -277,20 +290,22 @@ export default function OrdersPage() {
                 <main className="p-6 mt-16">
                         {/* Clickable Status Summary Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                            {["pending", "canceled", "approved", "picked_up", "returned"].map((status) => (
-                                <div
-                                    key={status}
-                                    className={`p-4 ${
-                                        status === "approved" ? "bg-green-500" :
-                                        status === "pending" ? "bg-yellow-500" :
-                                        status === "picked_up" ? "bg-purple-500" : // ✅ Matches the fixed status key
-                                        status === "canceled" ? "bg-red-500" :
-                                        "bg-blue-500"
-                                    } text-white rounded-lg flex items-center cursor-pointer ${
-                                        selectedFilter === status ? "border-4 border-white" : ""
-                                    }`}
-                                    onClick={() => handleFilterChange(status.replace("_", " "))} // ✅ Converts "picked_up" back to "picked up"
-                                >
+                        {["all", "pending", "canceled", "approved", "picked_up", "returned"].map((status) => (
+                               <div
+                               key={status}
+                               className={`p-4 ${
+                                   status === "all" ? "bg-gray-500" :  // ✅ Gray for "ALL" button
+                                   status === "approved" ? "bg-green-500" :
+                                   status === "pending" ? "bg-yellow-500" :
+                                   status === "picked_up" ? "bg-purple-500" :
+                                   status === "canceled" ? "bg-red-500" :
+                                   "bg-blue-500"
+                               } text-white rounded-lg flex items-center cursor-pointer ${
+                                   selectedFilter === status ? "border-4 border-white" : ""
+                               }`}
+                               onClick={() => handleFilterChange(status.replace("_", " "))} 
+                           >
+                           
                                     {status === "pending" && <Hourglass className="mr-2" />}
                                     {status === "canceled" && <Ban className="mr-2" />}
                                     {status === "approved" && <CalendarCheck className="mr-2" />}
@@ -335,7 +350,6 @@ export default function OrdersPage() {
 
             </div>
         </div>
-        <ChatWidgetPage />
         </>
     );
 }

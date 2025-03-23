@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "react-hot-toast";
+
 
 // ✅ Create Wishlist Context
 const WishlistContext = createContext();
@@ -38,7 +40,11 @@ export function WishlistProvider({ children }) {
         }
     
         if (wishlist.includes(productId)) {
-            alert("✅ This item is already in your wishlist.");
+            toast.error("This item is already in wishlist.", {
+                duration: 3000,
+                position: "top-right",
+            });
+            
             return;
         }
     
@@ -51,7 +57,11 @@ export function WishlistProvider({ children }) {
     
             if (response.data.success) {
                 setWishlist([...wishlist, productId]); // ✅ Update UI instantly
-                alert("✅ Added to wishlist successfully!");
+                toast.success("Added to wishlist!", {
+                    duration: 3000,
+                    position: "top-right",
+                });
+                
             }
         } catch (error) {
             handleApiError(error, "adding to wishlist");
@@ -104,7 +114,11 @@ export function WishlistProvider({ children }) {
                 );
     
                 setWishlist([...wishlist, productId]);
-                alert("✅ Added to wishlist!");
+                toast.success("Added to wishlist!", {
+                    duration: 3000,
+                    position: "top-right",
+                });
+                
             }
         } catch (error) {
             handleApiError(error, "modifying wishlist");
@@ -113,17 +127,17 @@ export function WishlistProvider({ children }) {
     
     const handleApiError = (error, action) => {
         if (!error.response) {
-            alert(`⚠ Network Error! Please check your internet connection before ${action}.`);
+            toast.error(`⚠ Network Error! Please check your internet connection before ${action}.`, { position: "top-right" });
         } else if (error.response.status === 401) {
-            alert("⚠ Unauthorized! Please log in again.");
+            toast.error("⚠ Unauthorized! Please log in again.", { position: "top-right" });
             localStorage.removeItem("token");
             window.location.href = "/login"; // ✅ Redirect to login page
         } else if (error.response.status === 422) {
-            alert(`⚠ Validation error while ${action}. Please check your input.`);
+            toast.error(`⚠ Validation error while ${action}. Please check your input.`, { position: "top-right" });
         } else {
-            alert(`⚠ Error ${action}: ${error.response.data.message || "An unexpected error occurred."}`);
+            toast.error(`⚠ Error ${action}: ${error.response.data.message || "An unexpected error occurred."}`, { position: "top-right" });
         }
-    };
+    };    
     
 
     return (

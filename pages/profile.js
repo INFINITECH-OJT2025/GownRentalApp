@@ -8,8 +8,8 @@ import AuthGuard from "../components/AuthGuard";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/sidebar";
 import axios from "axios";
-import ChatWidget from "../components/ChatWidget";
 import DataTable from "react-data-table-component"; // ✅ Import react-data-table-component
+import { toast } from "react-hot-toast";
 
 export default function ProfilePage() {
     const [loyaltyHistory, setLoyaltyHistory] = useState([]);
@@ -129,7 +129,7 @@ export default function ProfilePage() {
                 },
             });
     
-            alert("✅ Profile updated successfully!");
+            toast.success("Profile updated successfully!", { position: "top-right" });
     
             if (response.data.user.image) {
                 setImagePreview(response.data.user.image);
@@ -147,12 +147,12 @@ export default function ProfilePage() {
                     for (const key in errorMessages) {
                         errorText += `• ${errorMessages[key][0]}\n`;
                     }
-                    alert(errorText);
+                    toast.error(errorText, { position: "top-right" });
                 } else {
-                    alert(`❌ Server Error: ${err.response.data.message || "Unexpected error occurred."}`);
+                    toast.error(`Server Error: ${err.response.data.message || "Unexpected error occurred."}`, { position: "top-right" });
                 }
             } else {
-                alert("❌ Network Error! Please check your internet connection.");
+                toast.error("Network Error! Please check your internet connection.", { position: "top-right" });
             }
         } finally {
             setSaving(false); // ✅ Stop loading state
@@ -204,6 +204,28 @@ export default function ProfilePage() {
                     <Sidebar />
 
                     <main className="w-full md:w-3/4 lg:w-4/5 bg-white p-6 md:p-20 rounded-lg shadow-md">
+
+                        {/* ✅ Section Switch Buttons (Only Visible on Mobile & Slightly Lower) */}
+                    <div className="md:hidden flex flex-col items-start gap-2 mt-8">
+                        <button
+                            onClick={() => router.push("?section=public")}
+                            className={`px-4 py-2 rounded-lg w-full text-left ${
+                                section === "public" ? "bg-pink-600 text-white" : "bg-gray-300 text-gray-700"
+                            }`}
+                        >
+                            Public Profile
+                        </button>
+
+                        <button
+                            onClick={() => router.push("?section=loyalty")}
+                            className={`px-4 py-2 rounded-lg w-full text-left ${
+                                section === "loyalty" ? "bg-pink-600 text-white" : "bg-gray-300 text-gray-700"
+                            }`}
+                        >
+                            Loyalty & Rewards
+                        </button>
+                    </div>
+                    
                         {section === "loyalty" && (
                             <div className="p-6 bg-white shadow-lg rounded-lg">
                                 <h3 className="text-2xl font-bold text-pink-900">Loyalty & Rewards</h3>
@@ -246,11 +268,11 @@ export default function ProfilePage() {
                          {/* ✅ Show Public Profile Section */}
                          {section === "public" && (
                             <div>
-                                <p className="text-gray-700">Manage your personal information.</p>
+                              <p className="text-gray-700 mt-6 text-center">Manage your personal information.</p>
 
-                                {/* ✅ Profile Picture Section */}
-                                <div className="flex flex-col sm:flex-row items-center mt-8 space-y-4 sm:space-y-0 sm:space-x-6">
-                                {imagePreview && (
+                               {/* ✅ Profile Picture Section */}
+                               <div className="flex flex-col sm:flex-row items-center mt-8 space-y-4 sm:space-y-0 sm:space-x-6">
+                                {imagePreview && imagePreview !== "/default-profile.png" ? (
                                     <Image
                                         className="w-32 h-32 rounded-full ring-2 ring-pink-300 object-cover"
                                         src={imagePreview}
@@ -260,8 +282,19 @@ export default function ProfilePage() {
                                         loading="lazy"
                                         decoding="async"
                                     />
-                                )}
+                                ) : (
+                                    <div className="w-32 h-32 flex items-center justify-center rounded-full ring-2 ring-pink-300 bg-pink-100">
+                                       <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                        className="w-16 h-16 text-pink-600"
+                                    >
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4-6c0 2.21-1.79 4-4 4s-4-1.79-4-4h2c0 1.1.9 2 2 2s2-.9 2-2h2zm-6-4c-.83 0-1.5-.67-1.5-1.5S9.17 7 10 7s1.5.67 1.5 1.5S10.83 10 10 10zm4 0c-.83 0-1.5-.67-1.5-1.5S13.17 7 14 7s1.5.67 1.5 1.5S14.83 10 14 10z" />
+                                    </svg>
 
+                                    </div>
+                                )}
 
                                     <div className="flex flex-col space-y-3">
                                         <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="fileInput" />
@@ -361,7 +394,6 @@ export default function ProfilePage() {
                     </main>
                 </div>
             </div>
-            <ChatWidget />
         </AuthGuard>
     );
 }

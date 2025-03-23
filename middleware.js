@@ -12,25 +12,24 @@ export function middleware(req) {
         "/admin_pages/users",
     ];
 
-    // ✅ Get token & role from cookies
+    // ✅ Ensure `auth_token` is present in cookies
     const token = req.cookies.get("auth_token")?.value;
     const userRole = req.cookies.get("user_role")?.value;
 
-    // 🔴 If no token, redirect to login
     if (!token) {
-        return NextResponse.redirect(new URL("/login", req.url)); // ✅ Redirect to login instead of `/`
+        console.log("🔴 No token found! Redirecting to login.");
+        return NextResponse.redirect(new URL("/login", req.url));
     }
 
-    // 🔴 If user is not an admin, redirect to unauthorized page
     if (adminPaths.includes(req.nextUrl.pathname) && userRole !== "admin") {
-        return NextResponse.redirect(new URL("/login", req.url)); // ✅ Redirect to unauthorized instead of `/`
+        console.log("🔴 Unauthorized! User is not an admin.");
+        return NextResponse.redirect(new URL("/login", req.url));
     }
-
 
     return NextResponse.next();
 }
 
-// ✅ Apply middleware only to admin routes
+// ✅ Apply middleware only to admin pages
 export const config = {
     matcher: "/admin_pages/:path*",
 };

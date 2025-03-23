@@ -3,8 +3,7 @@
 import Head from "next/head";
 import AuthGuard from "../components/AuthGuard";
 import Link from "next/link";
-import Navbar from "../components/Navbar"; // Ensure Navbar is in the components folder
-import ChatWidget from "../components/ChatWidget"; 
+import Navbar from "../components/Navbar"; 
 
 export default function AboutPage() {
     return (
@@ -22,9 +21,10 @@ export default function AboutPage() {
                     <h1 className="text-5xl font-bold text-white drop-shadow-lg mt-6">
                         About <span className="text-pink-700">GownRental</span>
                     </h1>
-                    <p className="mt-4 text-lg text-white max-w-2xl mx-auto">
+                    <p className="mt-4 text-lg text-pink-900 max-w-2xl mx-auto [text-shadow:2px_2px_0px_black,-2px_-2px_0px_black,2px_-2px_0px_black,-2px_2px_0px_black]">
                         We offer luxurious gowns for all occasions, ensuring style and comfort at affordable prices.
                     </p>
+
                 </section>
 
 
@@ -66,7 +66,6 @@ export default function AboutPage() {
             {/* Footer */}
             <footer className="bg-pink-700 text-white text-center py-6 mt-10">
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-             <ChatWidget />
             </footer>
         </div>
         </AuthGuard>

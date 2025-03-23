@@ -6,7 +6,7 @@ import AdminSidebar from "../../components/AdminSidebar";
 import DataTable from "react-data-table-component";
 import { Pencil, XCircle } from "lucide-react";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat"; 
+import { toast } from "react-hot-toast";
 
 export default function PromotionalPage() {
     const [discountGroups, setDiscountGroups] = useState({});
@@ -80,15 +80,15 @@ export default function PromotionalPage() {
             );
     
             if (response.data.success) {
-                alert("✅ Discount updated successfully!");
+                toast.success("Discount updated successfully!", { position: "top-right" });
                 fetchProducts(); // ✅ Refresh product list
                 setIsEditModalOpen(false);
             } else {
-                alert("❌ Failed to update discount.");
+                toast.error("Failed to update discount.", { position: "top-right" });
             }
         } catch (error) {
             console.error("Error updating discount:", error);
-            alert("❌ Error updating discount.");
+            toast.error("Error updating discount. Please try again.", { position: "top-right" });
         } finally {
             setIsSaving(false); // ✅ Stop loading
         }
@@ -120,7 +120,6 @@ export default function PromotionalPage() {
         "bg-purple-500",
         "bg-green-500",
         "bg-yellow-500",
-        "bg-orange-500"
     ];
     
     return (
@@ -133,7 +132,7 @@ export default function PromotionalPage() {
         <div className="flex h-screen bg-white dark:bg-[#0F172A]">
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-            <div className={`transition-all duration-300 flex-1 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
+            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"} w-full overflow-x-hidden`}>
                 <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
                     <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental - Promotional Management</h1>
                 </header>
@@ -156,9 +155,11 @@ export default function PromotionalPage() {
                             </ul>
                         </div>
                     ))}
-                    <div className="bg-white p-6 rounded-lg shadow-md">
-                        <DataTable columns={columns} data={products} pagination highlightOnHover />
-                    </div>
+                        <div className="bg-white p-6 rounded-lg shadow-md">
+                        <div className="overflow-x-auto"> {/* ✅ Ensures horizontal scroll only when needed */}
+                                <DataTable columns={columns} data={products} pagination highlightOnHover />
+                            </div>
+                            </div>
                 </main>
             </div>
 
@@ -221,7 +222,6 @@ export default function PromotionalPage() {
 )}
 
         </div>
-         <ChatWidgetPage />
         </>
     );
 }

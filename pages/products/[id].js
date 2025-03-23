@@ -15,7 +15,6 @@ import { useFavorites } from "../../context/FavoritesContext";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 import * as tf from "@tensorflow/tfjs";
 import ReviewSection from "../../components/ReviewSection";
-import ChatWidget from "../../components/ChatWidget"; 
 import { toast, Toaster } from "react-hot-toast";
 
 export default function ProductDetailPage() {
@@ -35,7 +34,8 @@ export default function ProductDetailPage() {
   const [receiptImage, setReceiptImage] = useState(null);
   const chestWidthHistoryRef = useRef([]); // ✅ Store history in ref
   const maxHistorySize = 10; // 🔥 Adjust the smoothing window size
-
+  const [selectedSize, setSelectedSize] = useState("");
+  const [productSizes, setProductSizes] = useState([]); // ✅ Initialize as an empty array
 
   useEffect(() => {
     const setupCamera = async () => {
@@ -479,12 +479,17 @@ const handleBooking = async () => {
   const token = localStorage.getItem("token");
 
   if (!token) {
-    toast.error("⚠ You must be logged in to book.");
+    toast.error("⚠ You must be logged in to book.", { position: "top-right" });
     return;
   }
 
   if (!rentalDetails.startDate || !rentalDetails.endDate) {
-    toast.error("⚠ Please select both a Start Date and an End Date before booking.");
+    toast.error("⚠ Please select both a Start Date and an End Date before booking.", { position: "top-right" });
+    return;
+  }
+
+  if (!selectedSize) {
+    toast.error("⚠ Please select a size before booking.", { position: "top-right" });
     return;
   }
 
@@ -506,6 +511,7 @@ const handleBooking = async () => {
         added_price: rentalDetails.addedPrice,
         total_price: rentalDetails.totalPrice,
         discounted_price: product.discounted_price || product.price,
+        sizes: selectedSize, // ✅ Include selected size
       },
       {
         headers: { Authorization: `Bearer ${token}` },
@@ -514,59 +520,45 @@ const handleBooking = async () => {
 
     if (response.data.success) {
       const refNumber = response.data.booking.reference_number;
-      toast.success("Booking successful! Redirecting...");
+      toast.success("Booking successful! Redirecting...", { position: "top-right" });
 
       setTimeout(() => {
         setIsBooking(false);
         router.push(`/book?ref=${refNumber}`);
       }, 1500);
     } else {
-      toast.error(response.data.message || "❌ Failed to book. Please try again.");
+      toast.error(response.data.message || "Failed to book. Please try again.", { position: "top-right" });
       setIsBooking(false);
     }
   } catch (error) {
     setIsBooking(false);
-
-    // ✅ Catch and suppress Next.js runtime errors
-    if (error.response) {
-      if (error.response.status === 422) {
-        // ✅ Show a clean message for validation errors
-        if (error.response.data.errors?.end_date) {
-          alert("⚠ Please select an end date that is after the start date.");
-        } else {
-          alert("⚠ Booking failed. Please check your inputs.");
-        }
-      } else {
-        alert(error.response?.data?.message || "❌ Something went wrong.");
-      }
-    } else {
-      alert("⚠ Network error. Please check your internet connection.");
-    }
-
-    // ✅ Suppress Next.js unhandled runtime error
-    return Promise.resolve();
+    console.error("Error:", error.response?.data || error);
+    toast.error("❌ Booking failed. Please try again.", { position: "top-right" });
   }
 };
 
 
 useEffect(() => {
   if (id) {
-      axios.get(`http://127.0.0.1:8000/api/products/${id}`)
-          .then((response) => {
-              console.log("📡 API Response:", response.data); // ✅ Debug API Response
-              
-              if (response.data.success) {
-                  setProduct(response.data.product);
-                  setRentalDetails((prev) => ({
-                      ...prev,
-                      startDate: response.data.product.start_date,
-                      endDate: response.data.product.end_date,
-                  }));
-              }
-          })
-          .catch((error) => {
-              console.error("❌ Error fetching product:", error);
-          });
+    axios.get(`http://127.0.0.1:8000/api/products/${id}`)
+      .then((response) => {
+        if (response.data.success) {
+          setProduct(response.data.product);
+          setRentalDetails((prev) => ({
+            ...prev,
+            startDate: response.data.product.start_date,
+            endDate: response.data.product.end_date,
+          }));
+
+          // ✅ Ensure sizes are properly processed
+          const sizesArray = response.data.product.sizes
+            ? response.data.product.sizes.split(",").map(size => size.trim())
+            : [];
+
+          setProductSizes(sizesArray); // ✅ Set sizes correctly
+        }
+      })
+      .catch((error) => console.error("❌ Error fetching product:", error));
   }
 }, [id]);
 
@@ -704,6 +696,26 @@ const isDateAvailable = (date, isStartDate = true) => {
                     />
                   </button>
 
+          {/* ✅ Size Selection Combobox */}
+          <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700">Select Size:</label>
+          <select
+            value={selectedSize}
+            onChange={(e) => setSelectedSize(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md"
+          >
+            <option value="">-- Choose a Size --</option>
+            {productSizes.length > 0 ? (
+              productSizes.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))
+            ) : (
+              <option disabled>No sizes available</option> // ✅ Show message if no sizes
+            )}
+          </select>
+        </div>
+
+
                 </div>
 {/* Rental Date Selection & Pricing */}
 <div className="bg-white shadow-lg rounded-lg p-6">
@@ -831,7 +843,6 @@ const isDateAvailable = (date, isStartDate = true) => {
         {/* Footer */}
         <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                     <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-                <ChatWidget />
                 </footer>
       </div>
     </AuthGuard>

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import axios from "axios";
 import Cookies from "js-cookie";
+import { toast } from "react-hot-toast";
+
 
 export default function LoginPage() {
     const router = useRouter();
@@ -29,52 +31,65 @@ export default function LoginPage() {
         password: "",
     });
 
-    const [error, setError] = useState(null);
+    const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-const handleLogin = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-        const response = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL}/login`,
-            formData,
-            { headers: { "Content-Type": "application/json" } }
-        );
-
-        if (response.data.token) {
-            // ✅ Store token & user role in localStorage
-            localStorage.setItem("token", response.data.token);
-            localStorage.setItem("user", JSON.stringify(response.data.user));
-
-            // ✅ Store token & user role in Cookies (important for middleware)
-            Cookies.set("auth_token", response.data.token, { expires: 7, secure: true, sameSite: "Strict" });
-            Cookies.set("user_role", response.data.user.role, { expires: 7, secure: true, sameSite: "Strict" });
-
-            // ✅ Redirect based on role
-            if (response.data.user.role === "admin") {
-                router.push("/admin_pages/admin");
+    const handleLogin = async (event) => {
+        event.preventDefault();
+        setLoading(true);
+        setError(null);
+    
+        try {
+            const response = await axios.post(
+                `${process.env.NEXT_PUBLIC_API_URL}/login`,
+                formData,
+                { headers: { "Content-Type": "application/json" } }
+            );
+    
+            if (response.data.token) {
+                // ✅ Store token & user role in localStorage
+                localStorage.setItem("token", response.data.token);
+                localStorage.setItem("user", JSON.stringify(response.data.user));
+    
+                // ✅ Store token & role in Cookies (IMPORTANT for middleware)
+                Cookies.set("auth_token", response.data.token, { expires: 7, secure: true, sameSite: "Strict" });
+                Cookies.set("user_role", response.data.user.role, { expires: 7, secure: true, sameSite: "Strict" });
+    
+                toast.success("Login successful! Redirecting...", {
+                    duration: 3000,
+                    position: "top-right",
+                });
+                
+                setTimeout(() => {
+                    if (response.data.user.role === "admin") {
+                        router.push("/admin_pages/admin");
+                    } else {
+                        router.push("/");
+                    }
+                }, 2000); // Small delay before redirect
+                
             } else {
-                router.push("/");
+                toast.error("Login failed! Invalid credentials.", {
+                    duration: 3000,
+                    position: "top-right",
+                });
+                
             }
-        } else {
-            setError("❌ Login failed! Invalid credentials.");
+        } catch (err) {
+            setError(""); // ✅ Clear error state to prevent UI rendering issue
+            toast.error(err.response?.data?.message || "Invalid email or password.", {
+                duration: 3000,
+                position: "top-right",
+            });
+
+        } finally {
+            setLoading(false);
         }
-    } catch (err) {
-        setError(err.response?.data?.message || "Invalid email or password.");
-        console.error("API Error:", err);
-    } finally {
-        setLoading(false);
-    }
-};
-
-
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-pink-200 to-pink-400 px-6">
@@ -96,7 +111,6 @@ const handleLogin = async (event) => {
                     </p>
 
                     {/* ✅ Error Message */}
-                    {error && <p className="text-red-500 text-center mb-4">{error}</p>}
 
                     <form className="w-full space-y-4" onSubmit={handleLogin}>
                         <div>

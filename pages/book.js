@@ -7,7 +7,7 @@ import Navbar from "../components/Navbar";
 import AuthGuard from "../components/AuthGuard";
 import Head from "next/head";
 import AdminPaymentDetails from "../components/AdminPaymentDetails";
-import ChatWidget from "../components/ChatWidget"; 
+import { toast } from "react-hot-toast";
 
 export default function BookingPage() {
   const [isCanceled, setIsCanceled] = useState(false);
@@ -166,14 +166,14 @@ const handleUpload = async () => {
       );
 
       if (response.data.success) {
-          alert("✅ Receipt uploaded successfully!");
-          setTimeout(() => {
-              router.push("/bookhistory");
-          }, 1000);
-      } else {
-          alert(response.data.message || "❌ Failed to upload receipt.");
-      }
-
+        toast.success("Receipt uploaded successfully! Redirecting to booking history...", { position: "top-right" });
+        setTimeout(() => {
+            router.push("/bookhistory");
+        }, 1500);
+    } else {
+        toast.error(response.data.message || "Failed to upload receipt.", { position: "top-right" });
+    }
+    
   } catch (error) {
       console.error("❌ Error uploading receipt:", error);
 
@@ -242,7 +242,7 @@ const applyDiscount = async () => {
     );
 
     if (response.data.success) {
-      alert(`✅ Discount of ₱${pointsToUse} applied! New price: ₱${response.data.new_total_price}`);
+      toast.success(`Discount of ₱${pointsToUse} applied! New price: ₱${response.data.new_total_price}`, { position: "top-right" });
 
       // ✅ Deduct points properly
       setUser((prevUser) => ({
@@ -259,7 +259,8 @@ const applyDiscount = async () => {
       // ✅ Update final price correctly
       setFinalPrice(response.data.new_total_price);
     } else {
-      alert(response.data.message || "❌ Failed to apply discount.");
+      toast.error(response.data.message || "Failed to apply discount.", { position: "top-right" });
+
     }
   } catch (error) {
     console.error("❌ Error applying discount:", error);
@@ -280,11 +281,13 @@ const applyDiscount = async () => {
       );
 
       if (response.data.success) {
-        alert("✅ Booking canceled successfully!");
+        toast.success("Booking canceled successfully!", { position: "top-right" });
+
         setIsCanceled(true);
         router.push("/");
       } else {
-        alert("❌ Failed to cancel booking. Please try again.");
+        toast.error("Failed to cancel booking. Please try again.", { position: "top-right" });
+
       }
     } catch (error) {
       console.error("❌ Error canceling booking:", error);
@@ -326,10 +329,11 @@ const applyDiscount = async () => {
 
               {/* ✅ Button to go to Booking History */}
               <button
-                onClick={() => {
-                    setLoadingHistory(true);
-                    router.push("/bookhistory");
-                }}
+              onClick={() => {
+                setLoadingHistory(true);
+                toast.success("Redirecting to booking history...", { position: "top-right" });
+                router.push("/bookhistory");
+            }}            
                 className={`mt-4 px-6 py-2 rounded-md transition ${loadingHistory ? "bg-gray-500 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700 text-white"}`}
                 disabled={loadingHistory}
             >
@@ -339,32 +343,39 @@ const applyDiscount = async () => {
             </section>
 
           {/* Booking Details */}
-            <section className="bg-white shadow-lg rounded-lg p-6 text-center mt-6 w-full max-w-lg border-4 border-pink-300">
-                <h2 className="text-2xl font-semibold text-pink-700">Booking Details</h2>
-                <div className="mt-4 text-lg">
-                    <p><strong>Reference Number:</strong> {booking.reference_number}</p>
-                    <p><strong>Product:</strong> {booking.product.name}</p>
-                    <p><strong>Start Date:</strong> {booking.start_date}</p>
-                    <p><strong>End Date:</strong> {booking.end_date}</p>
-                   {/* ✅ Show Discounted Price from Bookings Table */}
-                    <p><strong>Original Price:</strong> 
-                      <span className="text-red-500 line-through">₱{Number(booking.total_price).toFixed(2)}</span>
-                    </p>
-                    <p><strong>Discounted Price:</strong> 
-                      <span className="text-green-600">
-                          ₱{isNaN(booking?.discounted_price) ? "0.00" : Number(booking.discounted_price).toFixed(2)}
-                      </span>
-                  </p>
+          <section className="bg-white shadow-lg rounded-lg p-6 text-center mt-6 w-full max-w-lg border-4 border-pink-300">
+              <h2 className="text-2xl font-semibold text-pink-700">Booking Details</h2>
+              <div className="mt-4 text-lg">
+                  <p><strong>Reference Number:</strong> {booking.reference_number}</p>
+                  <p><strong>Product:</strong> {booking.product.name}</p>
+                  <p><strong>Start Date:</strong> {booking.start_date}</p>
+                  <p><strong>End Date:</strong> {booking.end_date}</p>
+                  <p><strong>Selected Size:</strong> 
+                  {booking.sizes 
+                    ? <span className="text-pink-700"> {booking.sizes}</span>
+                    : <span className="text-red-500"> No size selected</span>}
+                </p>
+                  {/* ✅ Show Discounted Price from Bookings Table */}
+                  <p><strong>Original Price:</strong> 
+                  <span className="text-red-500">
+                      ₱{booking?.product?.price ? Number(booking.product.price).toFixed(2) : "0.00"}
+                  </span>
+              </p>
+              <p><strong>Discounted Price:</strong> 
+                  <span className="text-green-600">
+                      ₱{booking?.product?.discounted_price ? Number(booking.product.discounted_price).toFixed(2) : "0.00"}
+                  </span>
+              </p>
+
                   <p><strong>Added Rental Price:</strong> <span className="text-pink-600">₱{Number(booking.added_price).toFixed(2)}</span></p>
 
                   <p><strong>Final Price:</strong> 
-                    <span className="text-pink-600">
+                    <span  className="ml-1 bg-pink-200 text-pink-700 px-2 py-1 rounded-md">
                         ₱{!finalPrice || isNaN(finalPrice) ? "0.00" : Number(finalPrice).toFixed(2)}
                     </span>
-                </p>
-
-                </div>
-            </section>
+                  </p>
+              </div>
+          </section>
 
 
 
@@ -457,7 +468,6 @@ const applyDiscount = async () => {
             {/* Footer */}
             <footer className="bg-pink-600 text-white text-center py-6 mt-10">
                 <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-            <ChatWidget />
             </footer>
         </div>
     </AuthGuard>

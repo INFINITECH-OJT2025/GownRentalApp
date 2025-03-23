@@ -8,7 +8,7 @@ import axios from "axios";
 import DataTable from "react-data-table-component";
 import { useRouter } from "next/navigation";
 import AdminPaymentDetails from "../components/AdminPaymentDetails";
-import ChatWidget from "../components/ChatWidget"; 
+import { toast } from "react-hot-toast";
 
 export default function BookHistoryPage() {
     const [bookings, setBookings] = useState([]);
@@ -35,12 +35,12 @@ const handleFileChange = (event, bookingId) => {
 
 const handleUpload = async () => {
     if (!selectedFile) {
-        alert("⚠ Please select a receipt image to upload.");
+        toast.error("Please select a receipt image to upload.", { position: "top-right" });
         return;
     }
 
     if (!selectedBookingId) {
-        alert("❌ Booking ID is missing!");
+        toast.error("Booking ID is missing!", { position: "top-right" });
         return;
     }
 
@@ -60,14 +60,14 @@ const handleUpload = async () => {
             },
         });
 
-        alert("✅ Receipt uploaded successfully!");
+        toast.success("Receipt uploaded successfully!", { position: "top-right" });
         window.location.reload();
     } catch (error) {
         console.error("Upload Error:", error.response?.data || error);
-        alert("❌ Upload failed. Please try again.");
+        toast.error("Upload failed. Please try again.", { position: "top-right" });
     } finally {
         setUploading(false);
-        setLoadingAction(null); // ✅ Stop loading state
+        setLoadingAction(null); 
     }
 };
 
@@ -169,6 +169,12 @@ const handleShowProduct = (product, voucherFee) => {
             name: "Product",
             selector: (row) => row.product?.name || "N/A",
             sortable: true,
+        },
+        {
+            name: "Sizes",
+            selector: (row) => row.sizes || "N/A",
+            sortable: true,
+            width: "150px", 
         },
         {
             name: "Start Date",
@@ -348,9 +354,13 @@ const handleShowProduct = (product, voucherFee) => {
                 <Navbar />
     
                 {/* Page Header - Adjusted for More Spacing */}
-                <section className="relative bg-gradient-to-r from-pink-300 via-pink-200 to-pink-100 text-center py-20 md:py-24">
-                    <h1 className="text-3xl font-bold text-pink-900">Booking History</h1>
-                    <h4 className="text-1xl font text-pink-900">View past bookings</h4>
+                <section className="relative bg-gradient-to-r from-pink-300 via-pink-200 to-pink-100 text-center py-32 flex flex-col items-center">
+                <h1 className="text-5xl font-bold text-white drop-shadow-lg mt-6">
+                    Booking <span className="text-pink-700">History</span>
+                    </h1>
+                    <p className="mt-4 text-lg text-pink-900 max-w-2xl mx-auto [text-shadow:2px_2px_0px_black,-2px_-2px_0px_black,2px_-2px_0px_black,-2px_2px_0px_black]">
+                    View past bookings
+                    </p>
                 </section>
     
                 {/* Search & Filter Section */}
@@ -430,7 +440,6 @@ const handleShowProduct = (product, voucherFee) => {
                         </div>
                     )}
             </div>
-             <ChatWidget />
         </AuthGuard>
     );
 }

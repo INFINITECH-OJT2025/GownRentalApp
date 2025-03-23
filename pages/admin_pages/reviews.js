@@ -6,7 +6,6 @@ import AdminSidebar from "../../components/AdminSidebar";
 import DataTable from "react-data-table-component";
 import { Star } from "lucide-react";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat"; 
 
 export default function Reviews() {
     const [reviews, setReviews] = useState([]);
@@ -104,6 +103,16 @@ export default function Reviews() {
     const ratingCounts = [5, 4, 3, 2, 1]; // Ratings to filter
     const getTotalCount = (rating) => reviews.filter((review) => review.rating === rating).length;
 
+    const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
+        const date = new Date(dateString);
+        return date.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).replace(/ /g, "-"); // ✅ Convert spaces to dashes
+    };
+
     const columns = [
         { name: "Customer", selector: (row) => row.user?.name || "Anonymous", sortable: true },
         { name: "Product", selector: (row) => row.product?.name || "Unknown Product", sortable: true },
@@ -118,6 +127,11 @@ export default function Reviews() {
             ),
             sortable: true 
         },
+        { 
+            name: "Created Date", 
+            selector: (row) => formatDate(row.created_at), 
+            sortable: true 
+        }, 
         { name: "Comment", selector: (row) => row.comment, sortable: false },
         { 
             name: "Admin Reply", 
@@ -174,38 +188,39 @@ export default function Reviews() {
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
             {/* ✅ Main Content */}
-            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
+            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"} w-full overflow-x-hidden`}>
                 <header className="fixed top-0 w-full flex items-center justify-between bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
                     <h1 className="text-lg font-bold dark:text-white">Customer Reviews</h1>
                 </header>
 
-                <main className="p-6 mt-16">
+                <main className="p-6 mt-16 w-full overflow-x-auto">
                     <h2 className="text-xl font-semibold mb-4">Manage Customer Reviews</h2>
 
                     {error && <p className="text-red-500">{error}</p>}
 
-                    {/* ⭐ Rating Filter Buttons */}
-                    <div className="flex space-x-2 mb-4">
-                        <button 
-                            className={`px-4 py-2 rounded text-white font-bold ${
-                                selectedRating === null ? "bg-gray-600" : "bg-gray-400 hover:bg-gray-500"
-                            }`} 
-                            onClick={() => setSelectedRating(null)}
-                        >
-                            All
-                        </button>
-                        {ratingCounts.map((rating) => (
-                            <button
-                                key={rating}
+                   {/* ⭐ Responsive Rating Filter Buttons */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            <button 
                                 className={`px-4 py-2 rounded text-white font-bold ${
-                                    selectedRating === rating ? "bg-yellow-600" : "bg-yellow-400 hover:bg-yellow-500"
-                                }`}
-                                onClick={() => setSelectedRating(rating)}
+                                    selectedRating === null ? "bg-gray-600" : "bg-gray-400 hover:bg-gray-500"
+                                }`} 
+                                onClick={() => setSelectedRating(null)}
                             >
-                                ⭐ {rating} ({getTotalCount(rating)})
+                                All
                             </button>
-                        ))}
-                    </div>
+                            {ratingCounts.map((rating) => (
+                                <button
+                                    key={rating}
+                                    className={`flex items-center px-4 py-2 rounded text-white font-bold ${
+                                        selectedRating === rating ? "bg-yellow-600" : "bg-yellow-400 hover:bg-yellow-500"
+                                    }`}
+                                    onClick={() => setSelectedRating(rating)}
+                                >
+                                    ⭐ {rating} ({getTotalCount(rating)})
+                                </button>
+                            ))}
+                        </div>
+
 
                     {/* ✅ Search Input */}
                     <div className="mb-4">
@@ -218,18 +233,22 @@ export default function Reviews() {
                         />
                     </div>
 
-                    {/* ✅ DataTable with Filtered Data */}
-                    <DataTable 
-                        title="Customer Reviews" 
-                        columns={columns} 
-                        data={filteredReviews} 
-                        pagination 
-                        highlightOnHover 
-                    />
+                    <div className="bg-white p-6 rounded-lg shadow-md">
+                    <div className="overflow-x-auto"> {/* ✅ Ensures horizontal scroll only when needed */}
+                        <DataTable 
+                            title="Customer Reviews" 
+                            columns={columns} 
+                            data={filteredReviews} 
+                            pagination 
+                            highlightOnHover
+                            className="w-full min-w-[1024px]" // ✅ Ensures the table is wide enough for mobile and desktop
+                        />
+                      </div>
+                      </div>
+
                 </main>
             </div>
         </div>
-         <ChatWidgetPage />
         </>
     );
 }

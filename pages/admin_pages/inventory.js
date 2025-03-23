@@ -6,7 +6,7 @@ import AdminSidebar from "../../components/AdminSidebar";
 import DataTable from "react-data-table-component";
 import { Plus } from "lucide-react";
 import Head from "next/head";
-import ChatWidgetPage from "../../components/chat"; 
+import { toast } from "react-hot-toast";
 
 export default function InventoryPage() {
     const [inventory, setInventory] = useState([]);
@@ -76,7 +76,7 @@ export default function InventoryPage() {
 
     const handleAddStock = async () => {
         if (!selectedProduct || stockToAdd <= 0) {
-            alert("Please enter a valid stock quantity.");
+            toast.error("Please enter a valid stock quantity.", { position: "top-right" });
             return;
         }
     
@@ -84,13 +84,13 @@ export default function InventoryPage() {
     
         const token = localStorage.getItem("token");
         if (!token) {
-            console.error("Unauthorized: No token found.");
-            setIsAddingStock(false); // ✅ Stop loading
+            toast.error("Unauthorized: No token found.", { position: "top-right" });
+            setIsAddingStock(false);
             return;
         }
     
         try {
-            console.log("Sending stock update:", { stock: stockToAdd });
+            console.log("📡 Sending stock update:", { stock: stockToAdd });
     
             const response = await axios.put(
                 `http://127.0.0.1:8000/api/inventory/${selectedProduct.id}/add-stock`,
@@ -99,20 +99,20 @@ export default function InventoryPage() {
             );
     
             if (response.data.success) {
-                alert("Stock updated successfully!");
+                toast.success("Stock added successfully!", { position: "top-right" });
                 fetchInventory();
                 fetchStockLogs(); // ✅ Refresh stock logs
                 setIsModalOpen(false);
             } else {
-                alert("Failed to update stock: " + response.data.message);
+                toast.error("Failed to update stock: " + response.data.message, { position: "top-right" });
             }
         } catch (error) {
             console.error("Error updating stock:", error.response?.data || error);
-            alert("Error updating stock. Check console logs.");
+            toast.error("Error updating stock. Check console logs.", { position: "top-right" });
         } finally {
             setIsAddingStock(false); // ✅ Stop loading
         }
-    };
+    };    
     
 
     // ✅ Inventory Table Columns with Dynamic Background Colors
@@ -141,7 +141,7 @@ const inventoryColumns = [
     },
 ];
 
-// ✅ Stock Logs Table Columns with Styled Remarks
+// ✅ Stock Logs Table Columns with Styled Remarks & Properly Formatted Date
 const stockLogsColumns = [
     { name: "Product Name", selector: (row) => row.product_name, sortable: true },
     { name: "Stock Added", selector: (row) => row.stock_added, sortable: true },
@@ -155,7 +155,17 @@ const stockLogsColumns = [
             </span>
         ),
     },
-    { name: "Date", selector: (row) => row.created_at, sortable: true },
+    { 
+        name: "Date", 
+        selector: (row) => row.created_at, 
+        sortable: true,
+        cell: (row) => {
+            const date = new Date(row.created_at);
+            const formattedDate = `${date.getDate().toString().padStart(2, "0")}-${date.toLocaleString("en-GB", { month: "short" })}-${date.getFullYear()}`;
+
+            return <span>{formattedDate}</span>;
+        },
+    },
 ];
 
     return (
@@ -168,7 +178,7 @@ const stockLogsColumns = [
         <div className="flex h-screen bg-white dark:bg-[#0F172A]">
             <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-            <div className={`transition-all duration-300 flex-1 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
+            <div className={`transition-all duration-300 flex-1 ${isSidebarOpen ? "ml-60" : "ml-16"} overflow-x-hidden`}>
                 <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
                     <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
                 </header>
@@ -176,15 +186,32 @@ const stockLogsColumns = [
                 <main className="p-6 mt-16">
                     {/* Inventory Table */}
                     <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">Inventory</h1>
-                        <DataTable columns={inventoryColumns} data={inventory} pagination highlightOnHover />
+                    <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">Inventory</h1>
+                    <div className="overflow-x-auto"> {/* ✅ Ensures horizontal scrolling */}
+                        <DataTable 
+                            columns={inventoryColumns} 
+                            data={inventory} 
+                            pagination 
+                            highlightOnHover 
+                            className="min-w-[600px]" // ✅ Sets minimum width for scrolling
+                        />
                     </div>
+                </div>
+
 
                     {/* Stock Logs Table */}
                     <div className="bg-white p-6 rounded-lg shadow-md">
-                        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">Stock Logs</h1>
-                        <DataTable columns={stockLogsColumns} data={stockLogs} pagination highlightOnHover />
+                    <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">Stock Logs</h1>
+                    <div className="overflow-x-auto"> {/* ✅ Ensures horizontal scrolling */}
+                        <DataTable 
+                            columns={stockLogsColumns} 
+                            data={stockLogs} 
+                            pagination 
+                            highlightOnHover 
+                            className="min-w-[600px]" // ✅ Sets minimum width for scrolling
+                        />
                     </div>
+                </div>
                 </main>
             </div>
 
@@ -232,7 +259,6 @@ const stockLogsColumns = [
                 </div>
             )}
         </div>
-        <ChatWidgetPage />
         </>
     );
 }

@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "react-hot-toast";
+
 
 // ✅ Create Favorites Context
 const FavoritesContext = createContext();
@@ -24,47 +26,52 @@ export function FavoritesProvider({ children }) {
                 }
             } catch (error) {
                 if (!error.response) {
-                    alert("⚠ Network Error! Please check your internet connection or refresh the page.");
+                    toast.error("⚠ Network Error! Please check your internet connection.", { position: "top-right" });
                 } else if (error.response.status === 401) {
-                    alert("⚠ Unauthorized! Please log in again.");
+                    toast.error("⚠ Unauthorized! Please log in again.", { position: "top-right" });
                 } else {
-                    alert(`⚠ Error fetching favorites: ${error.response.data.message || "Unknown error."}`);
-                }
+                    toast.error(`⚠ Error fetching favorites: ${error.response.data.message || "Unknown error."}`, { position: "top-right" });
+                }                
             }
         };
         
         fetchFavorites();
     }, []);
 
-    // ✅ Function to Add Item to Favorites
     const addToFavorites = async (productId) => {
         const token = localStorage.getItem("token");
         if (!token) {
-            alert("⚠ You must be logged in to add to favorites.");
+            toast.error("⚠ You must be logged in to add favorites.", { position: "top-right" });
             return;
         }
-
+    
+        // ✅ Prevent adding duplicates before sending request
         if (favorites.includes(productId)) {
-            alert("✅ This item is already in your favorites.");
+            toast.error("⚠ This item is already in favorites.", { position: "top-right" });
             return;
         }
-
+    
         try {
             const response = await axios.post(
                 "http://127.0.0.1:8000/api/favorites",
                 { product_id: productId },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-
+    
             if (response.data.success) {
                 setFavorites([...favorites, productId]); // ✅ Update UI instantly
-                alert("✅ Added to favorites successfully!");
+                toast.success("Added to favorites!", { position: "top-right" });
             }
         } catch (error) {
-            console.error("Error adding to favorites:", error);
-            alert(error.response?.data?.message || "❌ An error occurred.");
+            if (error.response?.status === 409) {
+                toast.error("⚠ This item is already in favorites.", { position: "top-right" });
+            } else {
+                console.error("Error adding to favorites:", error);
+                toast.error("An error occurred while adding to favorites.", { position: "top-right" });
+            }
         }
     };
+    
 
     // ✅ Function to Remove Item from Favorites
     const removeFromFavorites = async (productId) => {
