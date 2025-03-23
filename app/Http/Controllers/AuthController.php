@@ -65,31 +65,35 @@ class AuthController extends Controller
      * ✅ Login and return access token.
      */
     public function login(Request $request)
-    {
-        $credentials = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required'
-        ]);
-    
-        if (!Auth::attempt($credentials)) {
-            return response()->json(['message' => 'Invalid email or password.'], 401);
-        }
-    
-        $user = Auth::user();
-        $token = $user->createToken('authToken')->accessToken;
-    
-        return response()->json([
-            'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role, // ✅ Include role in response
-                'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null
-            ]
-        ]);
+{
+    $credentials = $request->validate([
+        'email' => 'required|email',
+        'password' => 'required'
+    ]);
+
+    if (!Auth::attempt($credentials)) {
+        return response()->json(['message' => 'Invalid email or password.'], 401);
     }
-    
+
+    $user = Auth::user();
+
+    // ✅ Update `updated_at` to mark user as "active today"
+    $user->touch();
+
+    $token = $user->createToken('authToken')->accessToken;
+
+    return response()->json([
+        'token' => $token,
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null
+        ]
+    ]);
+}
+
     /**
      * ✅ Logout and revoke user's token.
      */

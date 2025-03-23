@@ -20,7 +20,7 @@ use App\Models\User;
 use App\Models\Chat;
 
 Route::middleware('auth:api')->get('/user', function (Request $request) {
-    $user = $request->user(); // ✅ Get authenticated user from Passport
+    $user = \App\Models\User::find($request->user()->id); // Fetch full user from DB
 
     if (!$user) {
         return response()->json(['error' => 'Unauthorized'], 401);
@@ -30,10 +30,11 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
         'id' => $user->id,
         'name' => $user->name,
         'email' => $user->email,
-        'role' => $user->role, // ✅ Check if admin or customer
+        'role' => $user->role,
         'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
     ]);
 });
+
 Route::get('/product/{id}/approved-bookings', function ($id) {
     $approvedBookings = Booking::where('product_id', $id)
         ->where('status', 'Approved') // ✅ Ensure status matches exactly
@@ -175,10 +176,32 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/inventory/{id}/add-stock', [DashboardController::class, 'addStock']); 
     Route::get('/stock-logs', [DashboardController::class, 'getStockLogs']);
     Route::post('/products/{id}/toggle-visibility', [DashboardController::class, 'toggleProductVisibility']);
-        Route::get('/admin/reviews', [ReviewController::class, 'getAllReviews']); // ✅ Fetch all reviews
-        Route::post('/admin/reviews/{id}/reply', [ReviewController::class, 'replyToReview']);
-        
+    Route::get('/admin/reviews', [ReviewController::class, 'getAllReviews']); // ✅ Fetch all reviews
+    Route::post('/admin/reviews/{id}/reply', [ReviewController::class, 'replyToReview']);
+    Route::get('/admin/products', [ProductController::class, 'adminIndex']);
+
 });
+
+// ✅ API to get wishlist count for a product
+Route::get('/product/{id}/wishlist-count', function ($id) {
+    $wishlistCount = \App\Models\Wishlist::where('product_id', $id)->count();
+
+    return response()->json([
+        'product_id' => $id,
+        'wishlist_count' => $wishlistCount
+    ]);
+});
+
+// ✅ API to get favorite count for a product
+Route::get('/product/{id}/favorite-count', function ($id) {
+    $favoriteCount = \App\Models\Favorite::where('product_id', $id)->count();
+
+    return response()->json([
+        'product_id' => $id,
+        'favorite_count' => $favoriteCount
+    ]);
+});
+
 
 // In routes/api.php (if you’re using an API)
 // Route::middleware('auth:api')->get('/booking-dates', [DashboardController::class, 'getBookingDates']);
@@ -234,6 +257,17 @@ Route::middleware(['auth:api'])->group(function () {
     Route::put('/admin/product/{id}/discount', [ProductController::class, 'updateDiscount']);
 });
 
+Route::middleware('auth:api')->get('/customers-today', function () {
+    $today = now()->toDateString();
+
+    $customers = \App\Models\User::where('role', 'customer')
+        ->whereDate('updated_at', $today)
+        ->get();
+
+    return response()->json(['customers' => $customers]);
+});
+
+
 
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']); // ❌ Not RESTful
@@ -253,11 +287,6 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/favorites', [FavoriteController::class, 'index']); // Fetch user's favorites
     Route::post('/favorites', [FavoriteController::class, 'store']); // Add favorite
     Route::delete('/favorites/{product_id}', [FavoriteController::class, 'destroy']); // Remove favorite
-
-    // ✅ User Info
-    Route::get('/user', function (Request $request) {
-        return response()->json($request->user());
-    });
 
     Route::middleware('auth:api')->group(function () {
         Route::get('/user', [UserController::class, 'show']); // ✅ Fetch user details

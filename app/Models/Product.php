@@ -11,9 +11,9 @@ class Product extends Model
 
     protected $fillable = [
         'name', 'price', 'category', 'stock', 'description',
-        'start_date', 'end_date', 'image', 'is_hidden', 'discounted_price'
+        'start_date', 'end_date', 'image', 'is_hidden', 'discounted_price', 'sizes'
     ];
-
+    
     public function applyDiscount($percentage)
     {
         if ($percentage > 0) {

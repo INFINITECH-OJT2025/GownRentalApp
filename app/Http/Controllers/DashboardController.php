@@ -11,6 +11,8 @@ use App\Models\Booking;
 use App\Models\StockAdjustment;
 use App\Mail\BookingStatusUpdateMail;
 use Illuminate\Support\Facades\Mail;
+use App\Models\Wishlist;
+use App\Models\Favorite;
 
 class DashboardController extends Controller
 {
@@ -105,31 +107,42 @@ class DashboardController extends Controller
     }
 
     public function getProducts()
-    {
-        try {
-            Log::info('Fetching visible products.');
-            $products = Product::where('is_hidden', false)->get();
-    
-            // ✅ Ensure full URL is always returned
-            $products->transform(function ($product) {
-                $product->image_url = url("storage/{$product->image}");
-                return $product;
-            });
-    
-            return response()->json([
-                'success' => true,
-                'data' => $products
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error fetching products: ' . $e->getMessage());
-    
-            return response()->json([
-                'success' => false,
-                'message' => 'Server error: ' . $e->getMessage()
-            ], 500);
-        }
+{
+    try {
+        Log::info('Fetching visible products.');
+        
+        $products = Product::where('is_hidden', false)->get();
+
+        // ✅ Ensure each product includes wishlist, favorite & approved bookings count
+        $products->transform(function ($product) {
+            $product->image_url = asset("storage/{$product->image}");
+
+            // ✅ Count all users who added this product to wishlist & favorites
+            $product->wishlist_count = Wishlist::where('product_id', $product->id)->count() ?? 0;
+            $product->favorite_count = Favorite::where('product_id', $product->id)->count() ?? 0;
+
+            // ✅ Count approved bookings for this product
+            $product->approved_bookings = Booking::where('product_id', $product->id)
+                ->whereIn('status', ['approved', 'picked up', 'returned'])
+                ->count() ?? 0;
+
+            return $product;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $products
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching products: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Server error: ' . $e->getMessage()
+        ], 500);
     }
-    
+}
+
 
     public function addStock(Request $request, $id) {
         // ✅ Log the incoming request
@@ -281,9 +294,10 @@ class DashboardController extends Controller
         'category' => 'required|string',
         'stock' => 'required|integer|min:0',
         'description' => 'nullable|string',
-        'start_date' => 'nullable|date_format:Y-m-d', // ✅ Ensure correct date format
+        'start_date' => 'nullable|date_format:Y-m-d',
         'end_date' => 'nullable|date_format:Y-m-d',
-        'image_url' => 'nullable|string', // ✅ Accept image URL instead of file
+        'image_url' => 'nullable|string',
+        'sizes' => 'nullable|string', // ✅ Accept comma-separated string
     ]);
 
     try {
@@ -295,7 +309,8 @@ class DashboardController extends Controller
             'description' => $validated['description'] ?? null,
             'start_date' => $validated['start_date'] ?? null,
             'end_date' => $validated['end_date'] ?? null,
-            'image' => $validated['image_url'] ?? null, // ✅ Save processed image URL
+            'image' => $validated['image_url'] ?? null,
+            'sizes' => $validated['sizes'] ?? '', // ✅ Store sizes
         ]);
 
         return response()->json([
@@ -322,7 +337,8 @@ public function updateProduct(Request $request, $id)
         'end_date' => 'nullable|date_format:Y-m-d',
         'stock' => 'nullable|integer|min:0',
         'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        'image_url' => 'nullable|string', // ✅ Allow updating with URL instead of file
+        'image_url' => 'nullable|string',
+        'sizes' => 'nullable|string', // ✅ Ensure sizes is a string, not an array
     ]);
 
     try {
@@ -335,15 +351,18 @@ public function updateProduct(Request $request, $id)
             ], 404);
         }
 
-        // ✅ Handle Image Upload
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('products', 'public');
-            $validated['image'] = str_replace("storage/", "", $imagePath); // ✅ Ensure only `products/filename.extension` is stored
+            $validated['image'] = str_replace("storage/", "", $imagePath);
         } elseif ($request->filled('image_url')) {
-            $validated['image'] = str_replace(["/storage/", "http://127.0.0.1:8000/storage/"], "", $request->image_url); // ✅ Fix URL path
-        }        
+            $validated['image'] = str_replace(["/storage/", "http://127.0.0.1:8000/storage/"], "", $request->image_url);
+        }  
 
-        // ✅ Update only provided fields
+        // ✅ Convert array to a proper comma-separated string
+        if ($request->filled('sizes') && is_array($request->sizes)) {
+            $validated['sizes'] = implode(", ", $request->sizes);
+        }
+
         $product->update(array_filter($validated));
 
         return response()->json([
@@ -360,6 +379,7 @@ public function updateProduct(Request $request, $id)
         ], 500);
     }
 }
+
 
     public function addInventory(Request $request)
     {
@@ -465,7 +485,7 @@ public function updateProduct(Request $request, $id)
     {
         $orders = Booking::with(['user:id,name,address', 'product:id,name'])
             ->select('id', 'reference_number', 'user_id', 'product_id', 'start_date', 'end_date', 'total_price', 
-                     'added_price', 'voucher_fee', 'discounted_price', 'gcash_receipt', 'status', 'created_at')
+                     'added_price', 'voucher_fee', 'discounted_price', 'gcash_receipt', 'status', 'created_at', 'sizes')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($order) {
@@ -475,6 +495,7 @@ public function updateProduct(Request $request, $id)
                     'user_name' => optional($order->user)->name ?? 'Unknown User',
                     'user_address' => optional($order->user)->address ?? 'No Address Provided',
                     'product_name' => optional($order->product)->name ?? 'Unknown Product',
+                    'sizes' => $order->sizes,
                     'start_date' => $order->start_date,
                     'end_date' => $order->end_date,
                     'total_price' => $order->total_price,

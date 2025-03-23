@@ -10,21 +10,31 @@ use Illuminate\Support\Facades\Auth;
 class WishlistController extends Controller {
 
     public function index() {
-        $user = Auth::guard('api')->user(); // ✅ Ensure we use the API guard
+        try {
+            $user = Auth::user(); // ✅ Use standard `Auth::user()`
     
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+            }
+    
+            $wishlist = Wishlist::where('user_id', $user->id)
+                ->with('product:id,name,image,price')
+                ->get();
+    
+            return response()->json([
+                'success' => true,
+                'data' => $wishlist
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching wishlist: ' . $e->getMessage());
+    
+            return response()->json([
+                'success' => false,
+                'message' => 'Server error: ' . $e->getMessage()
+            ], 500);
         }
-    
-        $wishlist = Wishlist::with('product')
-            ->where('user_id', $user->id)
-            ->get();
-    
-        return response()->json([
-            'success' => true,
-            'data' => $wishlist
-        ]);
     }
+    
     
     public function store(Request $request)
     {

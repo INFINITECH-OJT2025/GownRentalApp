@@ -34,7 +34,6 @@ class UserController extends Controller {
     public function show(Request $request) {
         $user = $request->user();
     
-        // ✅ Get user's current loyalty points from database (No recalculation)
         $loyaltyPoints = $user->loyalty_points;
     
         return response()->json([
@@ -42,16 +41,18 @@ class UserController extends Controller {
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'role' => $user->role, // ✅ Add this!
                 'address' => $user->address,
                 'bio' => $user->bio,
                 'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
                 'total_bookings' => Booking::where('user_id', $user->id)
                                            ->where('status', 'approved')
-                                           ->count(), // ✅ Count stays for reference
-                'loyalty_points' => $loyaltyPoints, // ✅ Fetch directly from DB
+                                           ->count(),
+                'loyalty_points' => $loyaltyPoints,
             ]
         ]);
     }
+    
 
     public function getLoyaltyHistory(Request $request)
 {
@@ -125,7 +126,7 @@ public function update(Request $request) {
 }
 
     
-    public function getCustomers()
+public function getCustomers()
 {
     $customers = User::where('role', 'customer')
         ->select('id', 'name', 'image as avatar')
@@ -133,7 +134,7 @@ public function update(Request $request) {
         ->map(function ($customer) {
             $customer->avatar = $customer->avatar 
                 ? (filter_var($customer->avatar, FILTER_VALIDATE_URL) ? $customer->avatar : url('/storage/' . $customer->avatar))
-                : url('/images/default_avatar.png'); // ✅ Ensure avatar has an absolute URL
+                : url('/images/default_avatar.png');
             return $customer;
         });
 

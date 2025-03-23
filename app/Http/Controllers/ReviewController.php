@@ -88,15 +88,15 @@ public function createReview(Request $request)
 }
 
 
-    public function getAllReviews()
-    {
-        $reviews = Review::with(['user:id,name', 'product:id,name'])
-            ->select('id', 'product_id', 'user_id', 'rating', 'comment', 'admin_reply', 'created_at')
-            ->get();
-    
-        return response()->json(['success' => true, 'reviews' => $reviews]);
-    }
-    
+public function getAllReviews()
+{
+    $reviews = Review::with(['user:id,name', 'product:id,name'])
+        ->select('id', 'product_id', 'user_id', 'rating', 'comment', 'admin_reply', 'created_at')
+        ->orderBy('created_at', 'desc') // ✅ Ensure sorting by latest reviews
+        ->get();
+
+    return response()->json(['success' => true, 'reviews' => $reviews]);
+}   
 
 public function replyToReview(Request $request, $id)
 {

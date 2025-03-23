@@ -12,25 +12,30 @@ class FavoriteController extends Controller
     // ✅ Fetch the logged-in user's favorite products
     public function index() {
         try {
-            $user = Auth::user();
+            $user = Auth::user(); // ✅ Use standard `Auth::user()`
+    
             if (!$user) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
             }
-
-            $favorites = Favorite::with('product')->where('user_id', $user->id)->get();
-
+    
+            $favorites = Favorite::where('user_id', $user->id)
+                ->with('product:id,name,image,price')
+                ->get();
+    
             return response()->json([
                 'success' => true,
                 'data' => $favorites
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error fetching favorites: ' . $e->getMessage());
+    
             return response()->json([
                 'success' => false,
-                'message' => 'Server Error',
-                'error' => $e->getMessage()
+                'message' => 'Server error: ' . $e->getMessage()
             ], 500);
         }
     }
+    
 
     public function clearFavorites() {
         $user = Auth::user();

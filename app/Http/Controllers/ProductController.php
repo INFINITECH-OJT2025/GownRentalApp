@@ -39,6 +39,38 @@ class ProductController extends Controller
         ]);
     }
     
+    public function adminIndex()
+{
+    // ✅ Fetch ALL products (including hidden ones)
+    $products = Product::all();
+
+    $products->transform(function ($product) {
+        $product->image_url = asset('storage/' . ltrim($product->image, 'storage/'));
+
+        // ✅ Calculate blocked dates
+        $blockedDates = [];
+        if ($product->start_date && $product->end_date) {
+            $start = new \DateTime($product->start_date);
+            $end = new \DateTime($product->end_date);
+            while ($start <= $end) {
+                $blockedDates[] = $start->format('Y-m-d');
+                $start->modify('+1 day');
+            }
+        }
+        $product->blocked_dates = $blockedDates;
+
+        // ✅ Include stock and stock status
+        $product->stock_status = $product->stock > 0 ? 'Available' : 'Out of Stock';
+
+        return $product;
+    });
+
+    return response()->json([
+        'success' => true,
+        'data' => $products
+    ]);
+}
+
 
 public function updateDiscount(Request $request, $id)
 {
@@ -91,11 +123,12 @@ public function updateDiscount(Request $request, $id)
             'price' => $product->price,
             'discounted_price' => $product->discounted_price,
             'stock' => $product->stock,
-            'stock_status' => $product->stock > 0 ? 'Available' : 'Out of Stock', // ✅ Add stock status
+            'stock_status' => $product->stock > 0 ? 'Available' : 'Out of Stock', // ✅ Stock status
             'description' => $product->description,
             'category' => $product->category,
             'start_date' => $product->start_date,
-            'end_date' => $product->end_date
+            'end_date' => $product->end_date,
+            'sizes' => $product->sizes,
         ]
     ]);
 }

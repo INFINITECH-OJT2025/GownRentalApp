@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Events\NewChatMessage;
 use App\Events\MessageSent;
 use App\Models\User;
-
+use App\Events\NewChatNotification;
 
 class ChatController extends Controller {
 
@@ -166,50 +166,50 @@ public function getChatSenders($receiverId)
     }
     
     public function sendMessage(Request $request)
-{
-    \Log::info('📩 Chat Request Data:', $request->all());
-
-    try {
-        $request->validate([
-            'message' => 'required|string',
-            'recipient_id' => 'required|exists:users,id',
-            'user_id' => 'required|exists:users,id',
-        ]);
-
-        $sender = User::find($request->user_id);
-        $recipient = User::find($request->recipient_id);
-
-        if (!$recipient) {
-            \Log::error('❌ Error: Recipient not found');
-            return response()->json(['error' => 'Recipient not found'], 404);
+    {
+        \Log::info('📩 Chat Request Data:', $request->all());
+    
+        try {
+            $request->validate([
+                'message' => 'required|string',
+                'recipient_id' => 'required|exists:users,id',
+                'user_id' => 'required|exists:users,id',
+            ]);
+    
+            $sender = User::find($request->user_id);
+            $recipient = User::find($request->recipient_id);
+    
+            if (!$recipient) {
+                \Log::error('❌ Error: Recipient not found');
+                return response()->json(['error' => 'Recipient not found'], 404);
+            }
+    
+            $message = Chat::create([
+                'user_id' => $sender->id,
+                'receiver_id' => $recipient->id,
+                'message' => $request->message,
+            ]);
+    
+            \Log::info('✅ Message Sent:', $message->toArray());
+    
+            // ✅ Broadcast message for frontend sync
+            broadcast(new NewChatMessage($message))->toOthers();
+    
+            // ✅ 🔔 Broadcast notification for badge
+            event(new \App\Events\NewChatNotification($message, $recipient->id));
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Message sent successfully',
+                'data' => $message,
+            ]);
+    
+        } catch (\Exception $e) {
+            \Log::error('❌ Chat Send Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Internal Server Error', 'details' => $e->getMessage()], 500);
         }
-
-        \Log::info("✅ Sending message from {$sender->id} to {$recipient->id}");
-
-        $message = Chat::create([
-            'user_id' => $sender->id,
-            'receiver_id' => $recipient->id,
-            'message' => $request->message,
-        ]);
-
-        \Log::info('✅ Message Sent:', $message->toArray());
-
-        // ✅ Check if message is sent to the correct recipient
-        if ($message->receiver_id !== $recipient->id) {
-            \Log::error("❌ Message sent to wrong recipient: {$message->receiver_id}");
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Message sent successfully',
-            'data' => $message,
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error('❌ Chat Send Error: ' . $e->getMessage());
-        return response()->json(['error' => 'Internal Server Error', 'details' => $e->getMessage()], 500);
     }
-}
+    
 
 public function getLastMessage($receiverId)
 {

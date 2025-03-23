@@ -18,34 +18,43 @@ class BookingController extends Controller
     public function show($referenceNumber)
     {
         $booking = Booking::with('product')->where('reference_number', $referenceNumber)->first();
-        
+    
         if (!$booking) {
             return response()->json(['success' => false, 'message' => 'Booking not found'], 404);
         }
     
-       return response()->json([
-        'success' => true,
-        'booking' => [
-            'id' => $booking->id,
-            'reference_number' => $booking->reference_number,
-            'product' => [
-                'id' => $booking->product->id,
-                'name' => $booking->product->name,
-            ],
-            'start_date' => $booking->start_date, // ✅ Include Start Date
-            'end_date' => $booking->end_date, // ✅ Include End Date
-            'discounted_price' => (float) ($booking->discounted_price ?? $booking->total_price),
-            'total_price' => (float) $booking->total_price,
-            'added_price' => (float) $booking->added_price,
-            'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
-            'gcash_receipt' => $booking->gcash_receipt,
-            'status' => $booking->status,
-            'created_at' => $booking->created_at,
-            'updated_at' => $booking->updated_at
-        ]
-    ]);    
-    }
-    
+        return response()->json([
+            'success' => true,
+            'booking' => [
+                'id' => $booking->id,
+                'reference_number' => $booking->reference_number,
+               'product' => $booking->product ? [
+                    'id' => $booking->product->id,
+                    'name' => $booking->product->name,
+                    'image_url' => asset('storage/' . $booking->product->image),
+                    'price' => (float) ($booking->product->price ?? 0), // ✅ Default to 0 if missing
+                    'discounted_price' => (float) ($booking->product->discounted_price ?? 0), // ✅ Default to 0 if missing
+                ] : [
+                    'id' => null,
+                    'name' => 'Unknown Product',
+                    'image_url' => null,
+                    'price' => 0, // ✅ Prevent NaN error
+                    'discounted_price' => 0, // ✅ Prevent NaN error
+                ],
+                'sizes' => $booking->sizes,
+                'start_date' => $booking->start_date, 
+                'end_date' => $booking->end_date, 
+                'discounted_price' => (float) ($booking->discounted_price ?? $booking->total_price),
+                'total_price' => (float) $booking->total_price,
+                'added_price' => (float) $booking->added_price,
+                'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
+                'gcash_receipt' => $booking->gcash_receipt,
+                'status' => $booking->status,
+                'created_at' => $booking->created_at,
+                'updated_at' => $booking->updated_at
+            ]
+        ]);
+    }    
 
 public function applyDiscount(Request $request)
 {
@@ -202,7 +211,7 @@ public function uploadReceipt(Request $request)
 }
 
 
-    public function store(Request $request)
+public function store(Request $request)
 {
     $validated = $request->validate([
         'product_id' => 'required|exists:products,id',
@@ -212,6 +221,7 @@ public function uploadReceipt(Request $request)
         'total_price' => 'required|numeric',
         'discounted_price' => 'nullable|numeric|min:0',
         'voucher_fee' => 'nullable|numeric|min:0',
+        'sizes' => 'required|string|max:255', // ✅ Validate size input
     ]);
 
     if (!auth()->check()) {
@@ -229,14 +239,14 @@ public function uploadReceipt(Request $request)
         'start_date' => $startDate,
         'end_date' => $endDate,
         'added_price' => $validated['added_price'],
-        'total_price' => $validated['total_price'] - $validated['added_price'], // ✅ Remove duplicate added_price
+        'total_price' => $validated['total_price'] - $validated['added_price'],
         'discounted_price' => $validated['discounted_price'] ?? $validated['total_price'],
         'voucher_fee' => $validated['voucher_fee'] ?? 0.00,
         'reference_number' => $referenceNumber,
+        'sizes' => $validated['sizes'], // ✅ Store selected size in DB
         'status' => 'pending',
     ]);
 
-    // ✅ Send Booking Confirmation Email
     Mail::to($user->email)->send(new BookingConfirmationMail($booking));
 
     return response()->json([
@@ -245,6 +255,7 @@ public function uploadReceipt(Request $request)
         'booking' => $booking,
     ]);
 }
+
 
     public function approveBooking($id)
 {
@@ -281,8 +292,10 @@ public function uploadReceipt(Request $request)
 public function index(Request $request)
 {
     try {
-        // ✅ Fetch all bookings with user and product names
-        $bookings = Booking::with(['user:id,name', 'product:id,name'])->get();
+        // ✅ Fetch all bookings with user, product names, and sizes
+        $bookings = Booking::with(['user:id,name', 'product:id,name']) // Eager load related models
+            ->orderBy('created_at', 'desc')
+            ->get(); // Fetch all bookings with sizes
 
         return response()->json([
             'success' => true,
@@ -296,5 +309,7 @@ public function index(Request $request)
         ], 500);
     }
 }
+
+
 
 }

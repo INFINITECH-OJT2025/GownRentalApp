@@ -20,7 +20,8 @@ class Booking extends Model
         'status',
         'reference_number',
         'voucher_fee', 
-        'discounted_price'
+        'discounted_price',
+        'sizes'
     ];
     
 
