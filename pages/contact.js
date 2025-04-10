@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState , useEffect } from "react";
 import AuthGuard from "../components/AuthGuard";
 import Navbar from "../components/Navbar";
 import Head from "next/head";
 import axios from "axios";
 import { toast, Toaster } from "react-hot-toast";
+import Footer from "../components/Footer";
 
 export default function ContactPage() {
     const [formData, setFormData] = useState({
@@ -13,14 +14,44 @@ export default function ContactPage() {
         email: "",
         message: "",
     });
+    const [errors, setErrors] = useState({});
+
 
     const [loading, setLoading] = useState(false);
     const [responseMessage, setResponseMessage] = useState("");
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+    
+        if (name === "email") {
+            const newErrors = { ...errors };
+    
+            if (!value) {
+                newErrors.email = "Email is required.";
+            } else if (!/^[^\s@]+@gmail\.com$/.test(value)) {
+                newErrors.email = "Please enter a valid email.";
+            } else {
+                delete newErrors.email;
+            }
+    
+            setErrors(newErrors);
+        }
     };
 
+    const [userRole, setUserRole] = useState(null);
+
+        useEffect(() => {
+        if (typeof window !== "undefined") {
+            const storedUser = localStorage.getItem("user");
+            if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            setUserRole(parsedUser?.role || null);
+            }
+        }
+        }, []);
+
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -86,17 +117,24 @@ export default function ContactPage() {
                             </div>
 
                             <div>
-                                <label className="text-gray-700 font-medium">Your Email Address</label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    required
-                                    className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring focus:ring-pink-300"
-                                    placeholder="Your Email"
-                                />
-                            </div>
+                            <label className="text-gray-700 font-medium">Your Email Address</label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                required
+                                className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring focus:ring-pink-300"
+                                placeholder="Your Email"
+                            />
+                            {errors.email && (
+                                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                            )}
+                            {formData.email && !errors.email && (
+                                <p className="text-green-600 text-sm mt-1">Valid email!</p>
+                            )}
+                        </div>
+
 
                             <div>
                                 <label className="text-gray-700 font-medium">Your Message</label>
@@ -111,23 +149,30 @@ export default function ContactPage() {
                                 ></textarea>
                             </div>
 
-                            <button
-                            type="submit"
-                            className="w-full bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2"
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <>
-                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            {userRole === "admin" ? (
+                                <p className="text-center text-gray-500 font-semibold mt-4">
+                                    Admins cannot send messages from this form.
+                                </p>
+                                ) : (
+                                <button
+                                    type="submit"
+                                    className="w-full bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2"
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                    <>
+                                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                                    </svg>
-                                    Sending...
-                                </>
-                            ) : (
-                                "Send Message"
-                            )}
-                        </button>
+                                        </svg>
+                                        Sending...
+                                    </>
+                                    ) : (
+                                    "Send Message"
+                                    )}
+                                </button>
+                                )}
+
 
 
                             {responseMessage && (
@@ -137,9 +182,7 @@ export default function ContactPage() {
                     </div>
                 </div>
 
-                <footer className="bg-pink-700 text-white text-center py-6 mt-10">
-                    <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-                </footer>
+                <Footer />
             </div>
         </AuthGuard>
     );

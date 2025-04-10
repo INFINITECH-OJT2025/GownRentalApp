@@ -1,15 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ["images.unsplash.com"], 
-      remotePatterns: [
-          {
-              protocol: "http",
-              hostname: "127.0.0.1",
-              port: "8000",
-              pathname: "/storage/**",
-          },
-      ],
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: '127.0.0.1',
+        port: '8000',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https', // Assuming the domain uses HTTPS
+        hostname: 'infinitech-api4.site',
+        pathname: '/storage/**', // Adjust the pathname as needed
+      },
+    ],
   },
 };
 

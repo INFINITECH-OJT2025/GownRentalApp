@@ -6,11 +6,15 @@ import Image from "next/image";
 import axios from "axios";
 import Cookies from "js-cookie";
 import { toast } from "react-hot-toast";
-
+import { Eye, EyeOff } from "lucide-react";
+import GuestNavbar from "../components/GuestNavbar";
+import Head from "next/head";
 
 export default function LoginPage() {
     const router = useRouter();
     const [rememberMe, setRememberMe] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+
 
     useEffect(() => {
         const token = localStorage.getItem("token");
@@ -66,11 +70,11 @@ export default function LoginPage() {
                 
                 setTimeout(() => {
                     if (response.data.user.role === "admin") {
-                        router.push("/admin_pages/admin");
+                        window.location.href = "/admin_pages/admin"; // 🔁 Full reload for admin
                     } else {
-                        router.push("/");
+                        window.location.href = "/"; // 🔁 Full reload for customer
                     }
-                }, 2000); // Small delay before redirect
+                }, 2000);                
                 
             } else {
                 toast.error("Login failed! Invalid credentials.", {
@@ -92,17 +96,31 @@ export default function LoginPage() {
     };
 
     return (
+        <>
+        <Head>
+          <title>Login Now | Gown Rental</title>
+          <meta name="description" content="Explore beautiful gowns for rent on Gown Rental." />
+          <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
+        </Head>
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-pink-200 to-pink-400 px-6">
+              <GuestNavbar />
             {/* ✅ Outer White Rounded Background */}
-            <div className="bg-white p-12 rounded-3xl shadow-xl w-full max-w-lg flex flex-col items-center">
+            <div className="bg-transparent p-12 w-full max-w-lg flex flex-col items-center">
                 {/* ✅ Logo and GownRental Text */}
-                <div className="flex items-center space-x-2 mb-6">
-                    <Image src="/gownrentalsicon.svg" alt="GownRental Logo" width={45} height={45} />
-                    <span className="text-3xl font-bold text-pink-600">GownRental</span>
+                  {/* ✅ GIF Logo */}
+                  <div className="flex justify-center mb-0 bottom-0">
+                <Image
+                    src="/images/new-gif.gif"
+                    alt="Login Animation"
+                    width={80}
+                    height={80}
+                    className="rounded-full"
+                    priority
+                />
                 </div>
-
-                {/* ✅ Inner Login Card */}
+                
                 <div className="bg-white p-8 rounded-2xl shadow-lg border border-pink-300 w-full">
+
                     <h2 className="text-3xl font-bold text-center text-pink-600 mb-4">
                         Welcome Back
                     </h2>
@@ -126,17 +144,26 @@ export default function LoginPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-pink-600 text-sm font-semibold">Password</label>
+                        <label className="block text-pink-600 text-sm font-semibold">Password</label>
+                        <div className="relative">
                             <input
-                                type="password"
-                                name="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-400 focus:border-transparent"
-                                placeholder="Enter your password"
-                                required
+                            type={showPassword ? "text" : "password"}
+                            name="password"
+                            value={formData.password}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-400 focus:border-transparent"
+                            placeholder="Enter your password"
+                            required
                             />
+                            <span
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            className="absolute inset-y-0 right-3 flex items-center cursor-pointer text-gray-500"
+                            >
+                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </span>
                         </div>
+                        </div>
+
                         <div className="flex justify-between items-center w-full">
                         <label className="flex items-center text-sm text-gray-600">
                         <input 
@@ -164,5 +191,6 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

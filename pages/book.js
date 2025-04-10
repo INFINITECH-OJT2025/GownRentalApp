@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import axios from "axios";
-import Navbar from "../components/Navbar";
-import AuthGuard from "../components/AuthGuard";
 import Head from "next/head";
 import AdminPaymentDetails from "../components/AdminPaymentDetails";
 import { toast } from "react-hot-toast";
+import AuthGuard from "../components/AuthGuard";
+import Navbar from "../components/Navbar"; 
+import { format } from "date-fns";
+import Footer from "../components/Footer";
+
 
 export default function BookingPage() {
   const [isCanceled, setIsCanceled] = useState(false);
@@ -23,6 +26,7 @@ export default function BookingPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingDiscount, setLoadingDiscount] = useState(false);
   const [loadingUpload, setLoadingUpload] = useState(false);
+  const [discountApplied, setDiscountApplied] = useState(false);
   const [loadingCancel, setLoadingCancel] = useState(false);
   
   useEffect(() => {
@@ -31,7 +35,7 @@ export default function BookingPage() {
         if (!token) return;
 
         try {
-            const response = await axios.get("http://127.0.0.1:8000/api/user", {
+            const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/user`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -49,6 +53,15 @@ export default function BookingPage() {
     fetchUser();
 }, []);
 
+const updateFinalPrice = (pointsToUse) => {
+  const basePrice = (Number(booking?.discounted_price) || Number(booking?.total_price) || 0) +
+                    (Number(booking?.added_price) || 0) - 
+                    (Number(booking?.voucher_fee) || 0);
+
+  const newPrice = Math.max(0, basePrice - pointsToUse);
+  setFinalPrice(newPrice);
+};
+
 
 useEffect(() => {
     if (!ref) {
@@ -65,7 +78,7 @@ useEffect(() => {
       }
     
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/bookings/${ref}`, {
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/bookings/${ref}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
     
@@ -87,12 +100,12 @@ useEffect(() => {
           setFinalPrice(Math.max(0, totalAmount)); // Ensure it doesn't go negative
         } else {
           alert("❌ Booking not found.");
-          router.replace("/products");
+          router.replace("/");
         }
       } catch (error) {
         console.error("❌ Error fetching booking:", error);
         alert("❌ An error occurred while fetching the booking.");
-        router.replace("/products");
+        router.replace("/");
       }
     };    
   
@@ -155,7 +168,7 @@ const handleUpload = async () => {
   try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-          "http://127.0.0.1:8000/api/bookings/upload-receipt",
+        `${process.env.NEXT_PUBLIC_API_URL}/bookings/upload-receipt`,      
           formData,
           {
               headers: {
@@ -194,26 +207,34 @@ const handleUpload = async () => {
   }
 };
 
+useEffect(() => {
+  if (user && user.loyalty_points >= 100) {
+    setPointsToUse(100); // Automatically set to 100
+    updateFinalPrice(100); // Update price immediately
+  }
+}, [user]);
+
+
 const handlePointsChange = (event) => {
+  if (user.loyalty_points < 100) return; // ❌ Block interaction if not enough points
+
   let value = parseInt(event.target.value, 10) || 0;
 
-  if (value > user.loyalty_points) {
-    alert("❌ You cannot use more points than you have!");
-    value = user.loyalty_points;
+  if (value > 100) {
+    alert("⚠ You can only use up to 100 points.");
+    value = 100;
   } else if (value < 0) {
     value = 0;
   }
 
   setPointsToUse(value);
 
-  // ✅ Ensure added rental price & discounts are included correctly
   const basePrice = (Number(booking?.discounted_price) || Number(booking?.total_price) || 0) +
                     (Number(booking?.added_price) || 0) -
-                    (Number(booking?.voucher_fee) || 0); // ✅ Deduct already applied voucher
+                    (Number(booking?.voucher_fee) || 0);
 
   const newPrice = Math.max(0, basePrice - value);
-
-  setFinalPrice(Number(newPrice.toFixed(2))); // ✅ Ensure proper number format
+  setFinalPrice(Number(newPrice.toFixed(2)));
 };
 
 
@@ -228,45 +249,42 @@ const applyDiscount = async () => {
     return;
   }
 
-  try {
-    const token = localStorage.getItem("token");
-    const response = await axios.post(
-      "http://127.0.0.1:8000/api/bookings/apply-discount",
-      {
-        booking_id: booking.id,
-        points_to_use: pointsToUse,
-      },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-
-    if (response.data.success) {
-      toast.success(`Discount of ₱${pointsToUse} applied! New price: ₱${response.data.new_total_price}`, { position: "top-right" });
-
-      // ✅ Deduct points properly
-      setUser((prevUser) => ({
-        ...prevUser,
-        loyalty_points: prevUser.loyalty_points - pointsToUse, // ✅ Deduct points correctly
-      }));
-
-      // ✅ Update `voucher_fee` in Booking
-      setBooking((prevBooking) => ({
-        ...prevBooking,
-        voucher_fee: pointsToUse, // ✅ Save voucher fee in state
-      }));
-
-      // ✅ Update final price correctly
-      setFinalPrice(response.data.new_total_price);
-    } else {
-      toast.error(response.data.message || "Failed to apply discount.", { position: "top-right" });
-
+  const token = localStorage.getItem("token");
+  const response = await axios.post(
+    `${process.env.NEXT_PUBLIC_API_URL}/bookings/apply-discount`,
+    {
+      booking_id: booking.id,
+      points_to_use: pointsToUse,
+    },
+    {
+      headers: { Authorization: `Bearer ${token}` },
     }
-  } catch (error) {
-    console.error("❌ Error applying discount:", error);
-    alert("❌ An error occurred while applying the discount.");
+  );
+
+  if (response.data.success) {
+    toast.success(`Discount of ₱${pointsToUse} applied! New price: ₱${response.data.new_total_price}`, {
+      position: "top-right",
+    });
+
+    setUser((prevUser) => ({
+      ...prevUser,
+      loyalty_points: prevUser.loyalty_points - pointsToUse,
+    }));
+
+    setBooking((prevBooking) => ({
+      ...prevBooking,
+      voucher_fee: pointsToUse,
+    }));
+
+    setFinalPrice(response.data.new_total_price);
+
+    // Set discountApplied to true after successful discount application
+    setDiscountApplied(true);
+  } else {
+    toast.error(response.data.message || "Failed to apply discount.", { position: "top-right" });
   }
 };
+
 
 
   const handleCancelBooking = async () => {
@@ -275,7 +293,7 @@ const applyDiscount = async () => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.patch(
-        `http://127.0.0.1:8000/api/bookings/${booking?.reference_number}/cancel`,
+        `${process.env.NEXT_PUBLIC_API_URL}/bookings/${booking?.reference_number}/cancel`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -348,8 +366,8 @@ const applyDiscount = async () => {
               <div className="mt-4 text-lg">
                   <p><strong>Reference Number:</strong> {booking.reference_number}</p>
                   <p><strong>Product:</strong> {booking.product.name}</p>
-                  <p><strong>Start Date:</strong> {booking.start_date}</p>
-                  <p><strong>End Date:</strong> {booking.end_date}</p>
+                  <p><strong>Start Date:</strong> {booking.start_date !== "N/A" ? format(new Date(booking.start_date), "dd-MMM-yyyy") : "N/A"}</p>
+                  <p><strong>End Date:</strong> {booking.end_date !== "N/A" ? format(new Date(booking.end_date), "dd-MMM-yyyy") : "N/A"}</p>
                   <p><strong>Selected Size:</strong> 
                   {booking.sizes 
                     ? <span className="text-pink-700"> {booking.sizes}</span>
@@ -380,48 +398,104 @@ const applyDiscount = async () => {
 
 
                 {/* Loyalty Points Discount Section */}
-          <div className="mt-6 p-4 border rounded-lg bg-pink-100">
-              <h3 className="text-xl font-semibold text-pink-900">Use Your Loyalty Points</h3>
-              
-              {user ? ( // ✅ Check if user exists before accessing loyalty_points
-                  <>
-                      <p className="text-gray-700">
-                          You have <strong>{user.loyalty_points}</strong> loyalty points available.
-                      </p>
+                <div className="mt-6 p-4 border rounded-lg bg-pink-100">
+                    <h3 className="text-xl font-semibold text-pink-900">Use Your Loyalty Points</h3>
 
-                      {/* Input for Loyalty Points */}
-                      <label className="block mt-4">Enter Points to Use:</label>
-                      <input
-                          type="number"
-                          className="border p-2 rounded-md w-full mt-1"
-                          value={pointsToUse}
-                          onChange={handlePointsChange}
-                      />
+                    {user ? (
+                      <>
+                        {/* Show messages based on available loyalty points */}
+                        {user.loyalty_points === 0 ? (
+                          <p className="text-red-600 mt-2">
+                            ⚠ You need loyalty points to use them.
+                          </p>
+                        ) : user.loyalty_points > 0 && user.loyalty_points < 100 ? (
+                          <p className="text-red-600 mt-2">
+                            ⚠ You can apply discount one time.
+                          </p>
+                        ) : (
+                          <>
+                            {/* Only show if user has 100 or more points */}
+                            <label className="block mt-4">Ready to Use Points:</label>
+                            <div className="flex items-center gap-2 mt-1">
+                              <button
+                                onClick={() => {
+                                  const newPoints = Math.max(100, pointsToUse - 100);
+                                  setPointsToUse(newPoints);
+                                  updateFinalPrice(newPoints);
+                                }}
+                                className="px-3 py-1 bg-pink-300 text-white rounded disabled:opacity-50"
+                                disabled={pointsToUse <= 100}
+                              >
+                                -
+                              </button>
+                              
+                              <input
+                                type="number"
+                                value={pointsToUse}
+                                disabled
+                                className="border text-center p-2 rounded w-full"
+                              />
 
+                              <button
+                                onClick={() => {
+                                  const nextPoints = pointsToUse + 100;
+                                  if (nextPoints <= user.loyalty_points) {
+                                    setPointsToUse(nextPoints);
+                                    updateFinalPrice(nextPoints);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-pink-500 text-white rounded disabled:opacity-50"
+                                disabled={pointsToUse + 100 > user.loyalty_points}
+                              >
+                                +
+                              </button>
+                            </div>
+
+                          </>
+                        )}
+
+                        {/* Display new total price after applying points */}
                         <p className="text-gray-700 mt-2">
                           New Total Price: <strong>₱{finalPrice.toFixed(2)}</strong>
                         </p>
 
-
-                      {/* Apply Discount Button */}
-                      <button
-                        onClick={async () => {
+                        {/* Apply Discount Button */}
+                        <button
+                          onClick={async () => {
+                            if (loadingDiscount || discountApplied) return; // Prevent double-click and if discount is already applied
                             setLoadingDiscount(true);
-                            await applyDiscount();
-                            setLoadingDiscount(false);
-                        }}
-                        className={`mt-4 px-6 py-2 rounded-md w-full transition ${loadingDiscount ? "bg-gray-500 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700 text-white"}`}
-                        disabled={loadingDiscount}
-                    >
-                        {loadingDiscount ? "Applying..." : "Apply Discount"}
-                    </button>
+                            try {
+                              await applyDiscount();
+                            } catch (error) {
+                              console.error("❌ Error applying discount:", error);
+                              if (error.response?.status === 429) {
+                                alert("⏳ You’re sending too many requests. Please wait a few seconds and try again.");
+                              } else {
+                                alert("❌ An error occurred while applying the discount.");
+                              }
+                            } finally {
+                              setLoadingDiscount(false);
+                            }
+                          }}
+                          className={`mt-4 px-6 py-2 rounded-md w-full transition ${
+                            loadingDiscount || discountApplied
+                              ? "bg-gray-500 cursor-not-allowed"
+                              : "bg-pink-600 hover:bg-pink-700 text-white"
+                          }`}
+                          disabled={
+                            loadingDiscount || pointsToUse <= 0 || pointsToUse > user.loyalty_points || discountApplied
+                          } // Disable button if points are invalid or discount is already applied
+                        >
+                          {loadingDiscount ? "Applying..." : discountApplied ? "Discount Applied" : "Apply Discount"}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-gray-600">Loading your loyalty points...</p>
+                    )}
+                  </div>
 
 
-                  </>
-              ) : (
-                  <p className="text-gray-600">Loading your loyalty points...</p>
-              )}
-          </div>
+
 
                 {/* GCash Payment + Upload Receipt + Cancel Booking */}
                 <section className="bg-white shadow-lg rounded-lg p-6 text-center mt-6 w-full max-w-lg border-4 border-pink-300">
@@ -466,9 +540,7 @@ const applyDiscount = async () => {
             </div>
 
             {/* Footer */}
-            <footer className="bg-pink-600 text-white text-center py-6 mt-10">
-                <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-            </footer>
+            <Footer />
         </div>
     </AuthGuard>
 );

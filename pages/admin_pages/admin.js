@@ -6,7 +6,11 @@ import Image from "next/image";
 import AdminSidebar from "../../components/AdminSidebar";
 import Head from "next/head";
 import { toast, Toaster } from "react-hot-toast";
-import { HiUsers, HiCube, HiCurrencyDollar, HiHeart, HiStar } from "react-icons/hi";
+import { HiUsers, HiCube, HiClock, HiClipboardList, HiCheckCircle, HiCurrencyDollar, HiHeart, HiStar } from "react-icons/hi";
+import AdminAnalyticsSection from "../../components/AdminAnalyticsSection";
+import Header from "../../components/Header";
+import dynamic from "next/dynamic";
+const BookingCalendar = dynamic(() => import("../../components/BookingCalendar"), { ssr: false });
 
 export default function AdminDashboard() {
     const router = useRouter();
@@ -15,6 +19,8 @@ export default function AdminDashboard() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [stats, setStats] = useState({ users: 0, products: 0, totalRevenue: 0 });
     const [products, setProducts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true); // Add loading state
+
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6; // Adjust the number of items per page
@@ -35,13 +41,21 @@ export default function AdminDashboard() {
         const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
         
         const fetchProducts = async () => {
+            setIsLoading(true);  // Start loading state
             try {
-                const response = await fetch("http://127.0.0.1:8000/api/products", {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products-with-counts`, {
                     headers: {
                         "Authorization": `Bearer ${localStorage.getItem("token")}`,
                         "Accept": "application/json"
                     }
                 });
+        
+                if (response.status === 429) {
+                    // Handle 429 (Too Many Requests)
+                    console.log("Too many requests, retrying...");
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for 5 seconds
+                    return fetchProducts(); // Retry fetching
+                }
         
                 if (!response.ok) {
                     throw new Error(`HTTP error! Status: ${response.status}`);
@@ -51,128 +65,41 @@ export default function AdminDashboard() {
                 console.log("📡 API Response (Products):", data);
         
                 if (data.success && Array.isArray(data.data)) {
-                    // ✅ Fetch approved bookings, wishlist, and favorite counts for each product
-                    const updatedProducts = await Promise.all(
-                        data.data.map(async (product) => {
-                            const approvedBookings = await fetchApprovedBookingCount(product.id);
-                            const wishlistCount = await fetchWishlistCount(product.id);
-                            const favoriteCount = await fetchFavoriteCount(product.id);
-        
-                            return {
-                                ...product,
-                                approved_bookings: approvedBookings, // ✅ Add approved bookings count
-                                wishlist_count: wishlistCount, // ✅ Add wishlist count
-                                favorite_count: favoriteCount, // ✅ Add favorite count
-                                image_url: product.image_url.startsWith("http")
-                                    ? product.image_url
-                                    : `http://127.0.0.1:8000/storage/${product.image}`
-                            };
-                        })
-                    );
-        
-                    setProducts([...updatedProducts]);
-                    console.log("Updated Products State:", updatedProducts);
+                    setProducts(data.data); // Set the products with counts directly
                 } else {
-                    alert("⚠ Unexpected API response format. Please try again later.");
+                    alert("⚠ Unexpected API response format.");
                 }
             } catch (error) {
                 console.error("❌ Error fetching products:", error);
                 alert("⚠ Unable to fetch products. Please check your internet connection or try again later.");
-            }
-        };
-
-        const fetchWishlistCount = async (productId) => {
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/api/product/${productId}/wishlist-count`, {
-                    headers: {
-                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-                        "Accept": "application/json"
-                    }
-                });
-        
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-        
-                const data = await response.json();
-                console.log(`📡 Wishlist Count for Product ${productId}:`, data);
-        
-                return data.wishlist_count || 0; // ✅ Ensure count is correct
-            } catch (error) {
-                console.error(`❌ Error fetching wishlist count for product ${productId}:`, error);
-                return 0; // ✅ Return 0 instead of crashing the app
-            }
-        };
-        
-        const fetchFavoriteCount = async (productId) => {
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/api/product/${productId}/favorite-count`, {
-                    headers: {
-                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-                        "Accept": "application/json"
-                    }
-                });
-        
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-        
-                const data = await response.json();
-                console.log(`📡 Favorite Count for Product ${productId}:`, data);
-        
-                return data.favorite_count || 0; // ✅ Ensure count is correct
-            } catch (error) {
-                console.error(`❌ Error fetching favorite count for product ${productId}:`, error);
-                return 0; // ✅ Return 0 instead of crashing the app
-            }
-        };        
-        
-        const fetchApprovedBookingCount = async (productId) => {
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/api/product/${productId}/approved-bookings`, {
-                    headers: {
-                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-                        "Accept": "application/json"
-                    }
-                });
-        
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-        
-                const data = await response.json();
-                console.log(`📡 Approved Bookings for Product ${productId}:`, data);
-        
-                return data.approved_bookings || 0; // ✅ Ensure count is correct
-            } catch (error) {
-                console.error(`❌ Error fetching approved bookings for product ${productId}:`, error);
-                return 0; // ✅ Return 0 instead of crashing the app
+            } finally {
+                setIsLoading(false); // Set loading to false after fetching
             }
         };
         
         
         useEffect(() => {
-            const storedUser = JSON.parse(localStorage.getItem("user"));
-            const token = localStorage.getItem("token");
-        
-            if (!storedUser || storedUser.role !== "admin") {
-                if (token) {  
-                    router.push("/"); // ✅ Redirects to `/` only if there's an active session
+            if (typeof window !== "undefined") {
+              const storedUser = JSON.parse(localStorage.getItem("user"));
+              const token = localStorage.getItem("token");
+          
+              if (!storedUser || storedUser.role !== "admin") {
+                if (token) {
+                  router.push("/");
                 }
-            } else {
+              } else {
                 setUser(storedUser);
-            }
-
-              // Fetch statistics and available products
+              }
+          
               fetchStats();
-              fetchProducts(); // ✅ This is now defined, so no more error
-
-        }, [router]);
-
+              fetchProducts();
+            }
+          }, [router]);
+          
 
     const fetchStats = async () => {
         try {
-            const response = await fetch("http://127.0.0.1:8000/api/dashboard/stats", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/stats`, {
                 headers: {
                     "Authorization": `Bearer ${localStorage.getItem("token")}`,
                     "Accept": "application/json"
@@ -190,10 +117,11 @@ export default function AdminDashboard() {
         }
     };
 
-    
+    useEffect(() => {
+        setCurrentPage(1);
+      }, [searchQuery]);
 
-   
-
+      
     return (
         <>
             <Toaster />
@@ -204,14 +132,37 @@ export default function AdminDashboard() {
             </Head>
 
             <div className={`${darkMode ? "dark" : ""} flex h-screen bg-white dark:bg-[#0F172A]`}>
+                {/* Floating burger (mobile only) */}
+                {!isSidebarOpen && (
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className={`fixed top-2 left-4 z-50 bg-pink-600 text-white p-3 rounded-full shadow-lg ${
+                        isSidebarOpen ? "hidden" : "block"
+                        } md:hidden`}
+                    >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            )}
+
+            {/* ✅ Dark overlay for mobile when sidebar is open */}
+            {isSidebarOpen && (
+            <div
+                className="fixed inset-0 bg-black bg-opacity-40 z-40 md:hidden"
+                onClick={() => setIsSidebarOpen(false)}
+            />
+            )}
+
+
                 <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-                <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"}`}>
-                <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-0">
-                        <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
-                    </header>
+        <div className={`flex-1 transition-all duration-300 md:${isSidebarOpen ? "ml-60" : "ml-16"} min-w-0`}>
+                  <Header isSidebarOpen={isSidebarOpen} />
 
-                    <main className="p-6 mt-16">
+
+                    <main className="p-6 mt-10">
+                        
                         <nav className="my-6 flex px-5 py-3 text-gray-700 rounded-lg bg-gray-50 dark:bg-[#1E293B]" aria-label="Breadcrumb">
                             <ol className="inline-flex items-center space-x-1 md:space-x-3">
                                 <li className="inline-flex items-center">
@@ -235,53 +186,101 @@ export default function AdminDashboard() {
                             </ol>
                         </nav>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* === STATS + CALENDAR Section === */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-5 items-start">
+                        {/* 🟣 Cards Section: 2 columns on large screens */}
+                        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {[
-                                { title: "Total Users", value: stats.users, icon: <HiUsers className="text-5xl text-pink-600" /> },
-                                { title: "Total Products", value: stats.products, icon: <HiCube className="text-5xl text-pink-600" /> },
-                                { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}`, icon: <HiCurrencyDollar className="text-5xl text-pink-600" /> },
+                            { title: "Total Users", value: stats.users, icon: <HiUsers className="text-5xl text-pink-600" /> },
+                            { title: "Total Products", value: stats.products, icon: <HiCube className="text-5xl text-pink-600" /> },
+                            { title: "Total Revenue", value: `₱${Number(stats.totalRevenue || 0).toLocaleString("en-PH")}`, icon: <span className="text-5xl text-pink-600 font-bold">₱</span> },
+                            { title: "Total Bookings", value: stats.bookings, icon: <HiClipboardList className="text-5xl text-pink-600" /> },
+                            { title: "Pending Bookings", value: stats.pendingBookings, icon: <HiClock className="text-5xl text-pink-600" /> },
+                            { title: "Completed Bookings", value: stats.completedBookings, icon: <HiCheckCircle className="text-5xl text-pink-600" /> },
                             ].map((item, index) => (
-                                <div key={index} className="bg-pink-100 shadow-md p-6 rounded-lg flex flex-col items-center">
-                                    {item.icon} {/* Icon Centered */}
-                                    <h2 className="text-xl font-bold text-gray-700 text-center mt-2">{item.title}</h2>
-                                    <p className="text-2xl font-bold">{item.value}</p>
-                                </div>
+                            <div key={index} className="bg-pink-100 shadow-md p-6 rounded-lg flex flex-col items-center">
+                                {item.icon}
+                                <h2 className="text-xl font-bold text-gray-700 text-center mt-2">{item.title}</h2>
+                                <p className="text-2xl font-bold">{item.value}</p>
+                            </div>
                             ))}
                         </div>
 
+                        {/* 🗓️ Calendar Section */}
+                        <div className="lg:col-span-1 h-full min-h-[800px] flex">
+                        <BookingCalendar />
+                    </div>
+                    </div>
+
+
+
                         {/* Available Gowns Section */}
+                        
+                        {/* 📊 Admin Analytics Section (embedded here!) */}
+                        <AdminAnalyticsSection isSidebarOpen={isSidebarOpen} />
+
                         <section className="mt-10">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Products - Gowns</h2>
+                        <div className="bg-gray-100 p-6 rounded-lg shadow-md mb-6">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+                                Products – Gowns
+                            </h2>
+                            
+                            {/* 💅 Styled Search Input with Icon */}
+                            <div className="relative flex items-center w-full sm:w-80">
                                 <input
-                                    type="text"
-                                    placeholder="Search gowns..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:ring focus:ring-pink-300"
+                                type="text"
+                                placeholder="Search gowns..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-5 pr-12 py-2 rounded-full border border-pink-200 focus:ring-2 focus:ring-pink-300 text-sm shadow-sm"
                                 />
+                                <button
+                                type="button"
+                                className="absolute right-1 top-1 bottom-1 bg-pink-700 hover:bg-pink-800 text-white rounded-full p-2 transition"
+                                disabled // 🔍 Optional: remove `disabled` if you want a click-to-search function
+                                >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M21 21l-4.35-4.35M16 10a6 6 0 11-12 0 6 6 0 0112 0z"
+                                    />
+                                </svg>
+                                </button>
                             </div>
+                            </div>
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {paginatedProducts.length > 0 ? (
-                                    paginatedProducts.map((product) => (
-                                        <div key={product.id} className="bg-white p-4 rounded-lg shadow-md">
-                                           <div className="relative w-full h-48 md:h-64 flex justify-center items-center">
-                                                                                  {product.image ? (
-                                                                                  <Image 
-                                                                                   src={`http://127.0.0.1:8000/storage/${product.image}`} 
-                                                                                   alt={product.name}
-                                                                                   width={200}
-                                                                                   height={400}
-                                                                                   className="rounded-lg object-cover"
-                                                                                 />
-                                                                                      ) : (
-                                                                                      <p>No Image Available</p>
-                                                                                      )}
-                                          
-                                                                                  </div>
-                                            <h3 className="text-lg font-bold mt-3">{product.name}</h3>
-                                            <p className="text-gray-600">{product.category}</p>
-                                            <p className="text-xl font-bold text-red-500">
+                            {isLoading ? (
+                                <p className="text-gray-500">Loading products...</p> // Show loading message
+                            ) : paginatedProducts.length > 0 ? (
+                                paginatedProducts.map((product) => (
+                                    <div key={product.id} className="bg-white p-4 rounded-lg shadow-md">
+                                        <div className="relative w-full h-48 md:h-64 flex justify-center items-center">
+                                            {product.image_url ? (
+                                                <Image 
+                                                    src={product.image_url} 
+                                                    alt={product.name} 
+                                                    width={200} 
+                                                    height={400} 
+                                                    style={{ borderRadius: '0.5rem', objectFit: 'cover' }} 
+                                                />
+
+                                            ) : (
+                                                <p>No Image Available</p>
+                                            )}
+                                        </div>
+                                        <h3 className="text-lg font-bold mt-3">{product.name}</h3>
+                                        <p className="text-gray-600">{product.category}</p>
+                                        <p className="text-xl font-bold text-red-500">
                                             {product.discounted_price ? (
                                                 <>
                                                     <span className="line-through text-gray-500">₱{Number(product.price).toLocaleString("en-PH")}</span>{" "}
@@ -292,46 +291,47 @@ export default function AdminDashboard() {
                                             )}
                                         </p>
 
-                                            <p className="text-gray-600">
-                                                Approved Bookings: <span className="font-bold text-green-600">{product.approved_bookings}</span>
-                                            </p>
-                                            <p className="text-gray-600">
-                                                Stock: <span className="font-bold">{product.stock}</span>
-                                            </p>
-                                            <p className={`text-lg font-bold ${product.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                {product.stock_status}
-                                            </p>
+                                        <p className="text-gray-600">
+                                            Successful Bookings: <span className="font-bold text-green-600">{product.approved_bookings}</span>
+                                        </p>
+                                        {product.size_stocks && Object.entries(product.size_stocks).map(([sizes, count]) => (
+                                        <p key={sizes} className="text-gray-600">
+                                            Stock for {sizes}: <span className="font-bold">{count}</span>
+                                        </p>
+                                        ))}
 
-                                            <div className="flex items-center space-x-4">
-                                                {/* Wishlist Count with Tooltip */}
-                                                <div className="relative group flex items-center space-x-1">
-                                                    <HiHeart className="text-red-500 text-2xl" />
-                                                    <span className="text-lg font-semibold text-gray-600">{product.wishlist_count}</span>
-                                                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
-                                                        This is the total times this product was added to wishlists.
-                                                        <div className="tooltip-arrow" data-popper-arrow></div>
-                                                    </div>
-                                                </div>
+                                        <p className={`text-lg font-bold ${product.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                            {product.stock_status}
+                                        </p>
 
-                                                {/* Favorite Count with Tooltip */}
-                                                <div className="relative group flex items-center space-x-1">
-                                                    <HiStar className="text-yellow-500 text-2xl" />
-                                                    <span className="text-lg font-semibold text-gray-600">{product.favorite_count}</span>
-                                                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
-                                                        This is the total times this product was favorited.
-                                                        <div className="tooltip-arrow" data-popper-arrow></div>
-                                                    </div>
+                                        <div className="flex items-center space-x-4">
+                                            {/* Wishlist Count with Tooltip */}
+                                            <div className="relative group flex items-center space-x-1">
+                                                <HiHeart className="text-red-500 text-2xl" />
+                                                <span className="text-lg font-semibold text-gray-600">{product.wishlist_count}</span>
+                                                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-green-600 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
+                                                    This is the total times this product was added to wishlists.
+                                                    <div className="tooltip-arrow" data-popper-arrow></div>
                                                 </div>
                                             </div>
 
-
+                                            {/* Favorite Count with Tooltip */}
+                                            <div className="relative group flex items-center space-x-1">
+                                                <HiStar className="text-yellow-500 text-2xl" />
+                                                <span className="text-lg font-semibold text-gray-600">{product.favorite_count}</span>
+                                                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-green-600 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
+                                                    This is the total times this product was favorited.
+                                                    <div className="tooltip-arrow" data-popper-arrow></div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        
-                                    ))
-                                ) : (
-                                    <p className="text-gray-500">No products available.</p>
-                                )}
-                            </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-500">No products available.</p>
+                            )}
+                        </div>
+
                             {/* Pagination Controls */}
                         <div className="flex justify-center mt-8 space-x-4">
                             <button
@@ -354,9 +354,8 @@ export default function AdminDashboard() {
                                 Next
                             </button>
                         </div>
-
+                        </div>
                         </section>
-
                     </main>
                 </div>
             </div>

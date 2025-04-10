@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import Talk from "talkjs";
 
 const getImageUrl = (img) => {
   if (!img) return null;
   return img.startsWith("http")
     ? img
-    : `http://127.0.0.1:8000/storage/profile_pictures/${img}`;
+    : `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/profile_pictures/${img}`;
 };
 
-export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessage, setLoading }) {
+export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessage, setLoading, setChatAllowed, chatLoading }) {
   const popupRef = useRef(null);
   const sessionRef = useRef(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -31,62 +30,123 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+  
 
+  useEffect(() => {
+    window.onerror = function (message, source, lineno, colno, error) {
+      if (source?.includes("talk.js")) {
+        console.warn("🛑 TalkJS crashed:", error || message);
+        // Reset UI silently
+        setChatLoaded(false);
+        setShowDesktopInbox(false);
+        setShowMobileInbox(false);
+        return true; // prevent default logging
+      }
+    };
+  
+    return () => {
+      window.onerror = null;
+    };
+  }, []);
+  
   const initTalk = async (userA, userB = null) => {
-    await Talk.ready;
+    let Talk;
   
-    const me = new Talk.User({
-      id: String(userA.id),
-      name: userA.name,
-      email: userA.email,
-      photoUrl: getImageUrl(userA.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(userA.name)}`,
-      role: userA.role,
-    });
+    try {
+      Talk = await import("talkjs").then((mod) => mod.default);
+      Talk.env = "development";
+      await Talk.ready;
+    } catch (err) {
+      console.warn("❌ TalkJS failed to load (maybe adblock or offline):", err);
   
-    const session = new Talk.Session({ appId: "t8oVirii", me });
-    session.setDesktopNotificationEnabled(true);
-    sessionRef.current = session;
+      const isTalkNetworkError =
+        err?.message?.includes("Failed to fetch") ||
+        (err?.stack || "").includes("talk.js");
   
-    session.on("message", (event) => {
+      if (isTalkNetworkError) {
+        setChatAllowed(false);
+        setLoading(false); // 🔴 EARLY EXIT 1
+        setShowDesktopInbox(false);
+        setShowMobileInbox(false);
+        return;
+      }
+  
+      throw err;
+    }
+  
+    if (!window.navigator.onLine) {
+      console.warn("⚠️ You're offline.");
+      setChatAllowed(false);
+      setLoading(false); // 🔴 EARLY EXIT 2
+      setShowDesktopInbox(false);
+      setShowMobileInbox(false);
+      return;
+    }
+  
+    try {
+      const me = new Talk.User({
+        id: String(userA.id),
+        name: userA.name,
+        email: userA.email,
+        photoUrl: getImageUrl(userA.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(userA.name)}`,
+        role: userA.role,
+      });
+  
+      let session;
       try {
-        const msg = event?.message;
-        const sender = msg?.sender;
-      
-        // Safe early exit if anything is missing
-        if (!msg || !sender || !sender.id || !msg.body) return;
-      
-        // Ignore self-sent messages
-        if (String(sender.id) === String(currentUser.id)) return;
-      
-        setLocalHasNewMessage(true);
-      
-        if (Notification.permission === "granted" && desktopNotifications) {
-          new Notification(`💬 New message from ${sender.name}`, {
-            body: msg.body,
-            icon: getImageUrl(sender.photoUrl) || "/default-avatar.png",
-          });
-        }
+        session = new Talk.Session({ appId: "t8oVirii", me });
       } catch (err) {
-        console.error("💥 TalkJS message error:", err);
-      }      
-    });
-    
+        console.error("❌ Talk.Session init error:", err);
+        setChatAllowed(false);
+        setLoading(false); // 🔴 EARLY EXIT 3
+        setShowDesktopInbox(false);
+        setShowMobileInbox(false);
+        return;
+      }
   
-    if (!isMobile) {
+      sessionRef.current = session;
+      session.setDesktopNotificationEnabled(true);
+  
+      session.on("message", (event) => {
+        try {
+          const msg = event?.message;
+          const sender = msg?.sender;
+          if (!msg || !sender || !sender.id || !msg.body) return;
+          if (String(sender.id) === String(currentUser.id)) return;
+  
+          setLocalHasNewMessage(true);
+  
+          if (Notification.permission === "granted" && desktopNotifications) {
+            new Notification(`💬 New message from ${sender.name}`, {
+              body: msg.body,
+              icon: getImageUrl(sender.photoUrl) || "/default-avatar.png",
+            });
+          }
+        } catch (err) {
+          console.warn("🔕 Error handling incoming message:", err);
+        }
+      });
+  
       const inbox = session.createInbox({
         selected: null,
-        style: {
-          position: "absolute",
-          top: "0",
-          left: "0",
-          width: "100%",
-          height: "100%",
-          border: "none",
-        },
+        showSendAttachments: true,
+        ...(isMobile
+          ? { showHeader: false }
+          : {
+              style: {
+                position: "absolute",
+                top: "0",
+                left: "0",
+                width: "100%",
+                height: "100%",
+                border: "none",
+              },
+            }),
       });
   
       for (const user of customers) {
         if (user.id === currentUser.id) continue;
+  
         const other = new Talk.User({
           id: String(user.id),
           name: user.name,
@@ -100,16 +160,38 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
         conversation.setParticipant(other);
       }
   
-      await inbox.mount(document.getElementById("talkjs-desktop-inbox-container"));
-      popupRef.current = inbox;
-      
-      const iframe = document.querySelector("#talkjs-desktop-inbox-container iframe");
-      if (iframe) {
-        iframe.style.position = "relative";
-        iframe.style.zIndex = "0";
+      const containerId = isMobile ? "talkjs-container" : "talkjs-desktop-inbox-container";
+      const mountTarget = document.getElementById(containerId);
+  
+      try {
+        const mountPromise = inbox.mount(mountTarget);
+        await Promise.race([
+          mountPromise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Mount timeout (possibly blocked)")), 20000)
+          ),
+        ]);
+      } catch (err) {
+        console.warn("⚠️ TalkJS inbox mount failed or was blocked:", err.message);
+        setChatAllowed(false);
+        setLoading(false); // 🔴 EARLY EXIT 4
+        setShowDesktopInbox(false);
+        setShowMobileInbox(false);
+        return;
       }
-      setLoading(false);
-      
+  
+      popupRef.current = inbox;
+  
+      if (!isMobile) {
+        setTimeout(() => {
+          const iframe = document.querySelector("#talkjs-desktop-inbox-container iframe");
+          if (iframe) {
+            iframe.style.zIndex = "10050";
+            iframe.style.position = "relative";
+          }
+        }, 500); // Wait a moment after mount
+        
+      }
   
       if (userB) {
         const other = new Talk.User({
@@ -117,40 +199,24 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
           name: userB.name,
           email: userB.email,
           photoUrl: getImageUrl(userB.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(userB.name)}`,
-          role: userB.role || 'customer',
+          role: userB.role || "customer",
         });
-      
-        const conversation = session.getOrCreateConversation(Talk.oneOnOneId(session.me, other));
-        conversation.setParticipant(session.me);
-        conversation.setParticipant(other);
-        inbox.select(conversation); 
-      }
-      
-    } else {
-      const inbox = session.createInbox({
-        selected: null,
-        showHeader: false,
-      });
-    
-      for (const user of customers) {
-        if (user.id === currentUser.id) continue;
-        const other = new Talk.User({
-          id: String(user.id),
-          name: user.name,
-          email: user.email,
-          photoUrl: getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
-          role: user.role || "customer",
-        });
-    
+  
         const conversation = session.getOrCreateConversation(Talk.oneOnOneId(me, other));
         conversation.setParticipant(me);
         conversation.setParticipant(other);
+        inbox.select(conversation);
       }
-    
-      await inbox.mount(document.getElementById("talkjs-container"));
-      popupRef.current = inbox;
+  
+      setLoading(false); // ✅ FINAL SUCCESS PATH
+    } catch (err) {
+      console.error("⚠️ Chat failed to load:", err);
+      setChatAllowed(false);
+      setLoading(false); // 🔴 FINAL CATCH
     }
-  };    
+  };
+  
+  
   
   useEffect(() => {
     if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
@@ -161,21 +227,23 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
   }, []);
 
   // 🔧 Call initTalk() when mobile inbox is shown
-useEffect(() => {
-  if (isMobile && showMobileInbox) {
-    setLoading(true);
-    setTimeout(async () => {
-      try {
-        await initTalk(currentUser, isAdmin ? selectedCustomer : customers[0]);
-      } catch (err) {
-        console.error("❌ Failed to init TalkJS (mobile):", err);
-      } finally {
-        setLoading(false);
-      }
-    }, 50);
-    
-  }
-}, [isMobile, showMobileInbox]);
+  useEffect(() => {
+    if (isMobile && showMobileInbox) {
+      setLoading(true);
+      setChatLoaded(true); // ✅ ADD THIS for loader to show
+  
+      setTimeout(async () => {
+        try {
+          await initTalk(currentUser, isAdmin ? selectedCustomer : customers[0]);
+        } catch (err) {
+          console.error("❌ Failed to init TalkJS (mobile):", err);
+        } finally {
+          setLoading(false);
+        }
+      }, 50);
+    }
+  }, [isMobile, showMobileInbox]);
+  
 
 
   const handleSelectCustomer = (e) => {
@@ -221,9 +289,10 @@ useEffect(() => {
     {/* Desktop: TalkJS Inbox with Combobox on top */}
 {!isMobile && chatLoaded && showDesktopInbox && (
   <div
-    className="fixed bottom-12 right-5 z-[9999] rounded-xl shadow-lg bg-white border flex flex-col"
-    style={{ width: "400px", height: "600px" }}
-  >
+  className="fixed bottom-12 right-5 z-[10010] rounded-xl shadow-lg bg-white border flex flex-col"
+  style={{ width: "400px", height: "600px" }}
+>
+
     {/* 👤 Combobox at the top */}
     <div className="p-2 border-b bg-white relative z-[10]">
       <select
@@ -252,7 +321,7 @@ useEffect(() => {
         defaultValue=""
       >
         <option value="" disabled>
-          {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+          {isAdmin ? "Select a customer who logged in today" : "Select to Connect with Admin"}
         </option>
         {customers
   .filter((u) => u.id !== currentUser.id)
@@ -272,6 +341,12 @@ useEffect(() => {
       });
 
       label += ` (${formattedDate} @ ${formattedTime})`;
+      if (user.is_active === 1) {
+        label += " - 🟢 Active";
+      } else if (user.is_active === 0) {
+        label += " - 🔴 Inactive";
+      }
+      
     }
 
     return (
@@ -286,6 +361,17 @@ useEffect(() => {
     </div>
 
     {/* 💬 TalkJS Inbox mounts here */}
+    {chatLoaded && showDesktopInbox && chatLoading && (
+  <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80">
+    <img
+      src="/gownrentalsicon.svg"
+      alt="Loading..."
+      className="w-20 h-20 animate-spin"
+    />
+  </div>
+)}
+
+
     <div
   id="talkjs-desktop-inbox-container"
   className="flex-1 relative z-0"
@@ -317,7 +403,7 @@ useEffect(() => {
     {/* Mobile Fullscreen Chat */}
 {/* Mobile Fullscreen Chat */}
 {isMobile && showMobileInbox && (
-  <div className="fixed top-12 left-0 right-0 bottom-0 z-[100000] bg-white flex flex-col">
+  <div className="fixed top-12 left-0 right-0 bottom-0 z-[10050] bg-white flex flex-col">
     
     {/* 🧭 Header with Title + ComboBox */}
     <div className="flex flex-col gap-2 px-4 py-2 border-b bg-white z-[1000002]">
@@ -368,6 +454,10 @@ useEffect(() => {
       });
 
       label += ` (${formattedDate} @ ${formattedTime})`;
+if (user.is_active) {
+  label += " - 🟢 Active now";
+}
+
     }
 
     return (
@@ -384,11 +474,22 @@ useEffect(() => {
     </div>
 
     {/* 💬 TalkJS chat container */}
+    {chatLoaded && showMobileInbox && chatLoading && (
+  <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80">
+    <img
+      src="/gownrentalsicon.svg"
+      alt="Loading..."
+      className="w-20 h-20 animate-spin"
+    />
+  </div>
+)}
+
+
     <div
-      id="talkjs-container"
-      className="w-full flex-1 relative z-[1000001]"
-      style={{ position: "relative" }}
-    ></div>
+  id="talkjs-container"
+  className="w-full flex-1 relative z-[10051]"
+></div>
+
 
     {/* ❌ Close chat button */}
     <button

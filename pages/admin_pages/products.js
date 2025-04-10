@@ -4,13 +4,20 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import AdminSidebar from "../../components/AdminSidebar";
 import DataTable from "react-data-table-component";
-import { Pencil, Trash2, PlusCircle, XCircle,EyeOff, Eye } from "lucide-react";
+import { Pencil, Trash2, PlusCircle, XCircle,EyeOff, Eye, Tag, Loader2, Boxes } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Head from "next/head";
 import { toast } from "react-hot-toast";
+import Header from "../../components/Header";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import Papa from "papaparse";
+import { format } from "date-fns";
+
 
 export default function ProductsPage() {
+     const [darkMode, setDarkMode] = useState(false);
     const [products, setProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -22,10 +29,16 @@ export default function ProductsPage() {
     const [categories, setCategories] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
-    const [isAddingProduct, setIsAddingProduct] = useState(false); // ✅ Tracks Add Product button state
-    const [isSavingChanges, setIsSavingChanges] = useState(false); // ✅ Tracks Save Changes button state
-
-    const [selectedSize, setSelectedSize] = useState("Medium");
+    const [isAddingProduct, setIsAddingProduct] = useState(false); 
+    const [isSavingChanges, setIsSavingChanges] = useState(false); 
+    const [isCategoryLoading, setIsCategoryLoading] = useState(false);
+    const [selectedProductGroup, setSelectedProductGroup] = useState([]);
+    // Add this state near top
+    const [showCategoryFilters, setShowCategoryFilters] = useState(false);
+    const [isExportingCSV, setIsExportingCSV] = useState(false);
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
+    
+    const [selectedSize, setSelectedsizes] = useState("Medium");
 
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -33,20 +46,125 @@ export default function ProductsPage() {
         name: "",
         price: "",
         category: "",
-        stock: "",
         description: "",
         start_date: "",
         end_date: "",
         image: null,
         previewImage: null,
-        sizes: [], // ✅ Ensure it's an array
-    });
-    
+        sizesWithStock: {},  // ✅ Include this
+        showCustomCategory: false,
+      });
+      
+      const hasEmptyStock = Object.values(formData.sizesWithStock || {}).some(v => !v || isNaN(v));
+      const sizeCount = Object.keys(formData.sizesWithStock || {}).length;
+      
 
-    const handleSizeChange = (size) => {
-        setSelectedSize(size);
+    const handleSizeChange = (sizes) => {
+        setSelectedSize(sizes);
     };
     
+    const formatCurrency = (value) => {
+        return `P${Number(value || 0).toLocaleString("en-PH", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        })}`;
+    };
+    
+
+    const exportToCSV = () => {
+        setIsExportingCSV(true);
+      
+        try {
+          const csvData = filteredProducts.flatMap(productGroup =>
+            (productGroup.groupedItems || [productGroup]).map(item => ({
+              "Product Name": item.name,
+              "Category": item.category,
+              "Size": item.sizes,
+              "Price": item.price,
+              "Stock": item.stock,
+              "Start Date": format(new Date(item.start_date), "dd-MMM-yyyy"),
+              "End Date": format(new Date(item.end_date), "dd-MMM-yyyy"),
+            }))
+          );
+      
+          const csv = Papa.unparse(csvData);
+          const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+      
+          link.href = url;
+          link.setAttribute("download", `Products_${format(new Date(), "dd-MMM-yyyy")}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+      
+          toast.success("CSV exported!", { position: "top-right" });
+        } catch (error) {
+          toast.error("Failed to export CSV", { position: "top-right" });
+        } finally {
+          setTimeout(() => setIsExportingCSV(false), 1000);
+        }
+      };
+      
+      const exportToPDF = () => {
+        setIsExportingPDF(true);
+      
+        const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        const today = format(new Date(), "dd MMM yyyy HH:mm:ss");
+        const totalPagesExp = "{total_pages_count_string}";
+        const logoBase64 = process.env.NEXT_PUBLIC_LOGO_BASE64 || "";
+      
+        if (logoBase64) {
+          doc.addImage(logoBase64, "PNG", 10, 10, 20, 20);
+        }
+      
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text("Product Inventory", 35, 20);
+      
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text(`Created Date: ${today}`, 35, 28);
+      
+        autoTable(doc, {
+          startY: 35,
+          head: [["Name", "Category", "Size", "Price", "Stock", "Start Date", "End Date"]],
+          body: filteredProducts.flatMap(productGroup =>
+            (productGroup.groupedItems || [productGroup]).map(item => [
+              item.name,
+              item.category,
+              item.sizes,
+              formatCurrency(item.price),
+              item.stock,
+              format(new Date(item.start_date), "dd-MMM-yyyy"),
+              format(new Date(item.end_date), "dd-MMM-yyyy"),
+            ])
+          ),
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [255, 105, 180], textColor: 255 },
+          theme: "grid",
+          didDrawPage: function (data) {
+            const pageSize = doc.internal.pageSize;
+            const pageHeight = pageSize.height || doc.internal.pageSize.getHeight();
+            doc.setFontSize(9);
+            doc.setTextColor(100);
+            doc.text("Generated by Gown Rental System", 10, pageHeight - 10);
+            const pageStr = "Page " + doc.internal.getNumberOfPages() + " of " + totalPagesExp;
+            doc.text(pageStr, pageSize.width - 40, pageHeight - 10);
+          },
+        });
+      
+        if (typeof doc.putTotalPages === "function") {
+          doc.putTotalPages(totalPagesExp);
+        }
+      
+        doc.save(`Products_${format(new Date(), "dd-MMM-yyyy")}.pdf`);
+        toast.success("PDF exported!", { position: "top-right" });
+      
+        setTimeout(() => setIsExportingPDF(false), 1000);
+      };
+      
+      
     useEffect(() => {
         fetchProducts();
     }, []);
@@ -69,9 +187,8 @@ useEffect(() => {
     }
 }, [products]);
 
-// ✅ Automatically filter products based on selected category & search query
 useEffect(() => {
-    let filtered = products;
+    let filtered = [...products];
 
     if (selectedCategory) {
         if (selectedCategory === "Hidden Products") {
@@ -89,21 +206,92 @@ useEffect(() => {
         );
     }
 
-    setFilteredProducts(filtered);
+    // Grouping logic (always applied)
+    const grouped = [];
+    const seen = new Set();
+
+    filtered.forEach((product) => {
+        const key = `${product.name}-${product.price}-${product.category}-${product.description}-${product.image_url}-${product.start_date}-${product.end_date}`;
+        if (!seen.has(key)) {
+            const groupItems = filtered.filter((p) =>
+                p.name === product.name &&
+                p.price === product.price &&
+                p.category === product.category &&
+                p.description === product.description &&
+                p.image_url === product.image_url &&
+                p.start_date === product.start_date &&
+                p.end_date === product.end_date
+            );
+
+            const totalStock = groupItems.reduce((sum, item) => sum + Number(item.stock), 0);
+
+            grouped.push({
+                ...product,
+                stock: totalStock,
+                groupedItems: groupItems,
+            });
+
+            seen.add(key);
+        }
+    });
+
+    setFilteredProducts(grouped); // ✅ final grouped data regardless of category
 }, [products, selectedCategory, searchQuery]);
 
-    const filterByCategory = (category) => {
-        setSelectedCategory(category);
-        if (category === null) {
-            setFilteredProducts(products);
-        } else if (category === "Hidden Products") {
-            setFilteredProducts(products.filter((product) => product.is_hidden === 1)); // ✅ Show only hidden products
-        } else {
-            setFilteredProducts(products.filter((product) => product.category === category && product.is_hidden === 0)); // ✅ Show only visible products in selected category
+
+const filterByCategory = (category) => {
+    setIsCategoryLoading(true);
+    setSelectedCategory(category);
+
+    let filtered = [...products];
+
+    if (category === "Hidden Products") {
+        filtered = products.filter((product) => product.is_hidden === 1);
+    } else if (category !== null) {
+        filtered = products.filter((product) => product.category === category && product.is_hidden === 0);
+    }
+
+    if (searchQuery.trim() !== "") {
+        filtered = filtered.filter((product) =>
+            product.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }
+
+    // ✅ Apply grouping logic here
+    const grouped = [];
+    const seen = new Set();
+
+    filtered.forEach((product) => {
+        const key = `${product.name}-${product.price}-${product.category}-${product.description}-${product.image_url}-${product.start_date}-${product.end_date}`;
+        if (!seen.has(key)) {
+            const groupItems = filtered.filter((p) =>
+                p.name === product.name &&
+                p.price === product.price &&
+                p.category === product.category &&
+                p.description === product.description &&
+                p.image_url === product.image_url &&
+                p.start_date === product.start_date &&
+                p.end_date === product.end_date
+            );
+
+            const totalStock = groupItems.reduce((sum, item) => sum + Number(item.stock), 0);
+
+            grouped.push({
+                ...product,
+                stock: totalStock,
+                groupedItems: groupItems,
+            });
+
+            seen.add(key);
         }
-    };
-    
-    
+    });
+
+    setTimeout(() => {
+        setFilteredProducts(grouped); // ✅ Use grouped
+        setIsCategoryLoading(false);
+    }, 300);
+};
+
 
     const fetchProducts = async () => {
         const token = localStorage.getItem("token");
@@ -115,15 +303,44 @@ useEffect(() => {
     
         try {
             console.log("📡 Fetching products (Admin API)...");
-            const response = await axios.get("http://127.0.0.1:8000/api/admin/products", {
+            const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/products`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
     
             console.log("✅ API Response (Admin):", response.data);
     
             if (response.data.success && Array.isArray(response.data.data)) {
-                setProducts(response.data.data);
-                setFilteredProducts(response.data.data); // ✅ Set initial state
+                const grouped = [];
+                const seen = new Set();
+
+                response.data.data.forEach((product) => {
+                    const key = `${product.name}-${product.price}-${product.category}-${product.description}-${product.image_url}-${product.start_date}-${product.end_date}`;
+                    if (!seen.has(key)) {
+                        const groupItems = response.data.data.filter((p) =>
+                            p.name === product.name &&
+                            p.price === product.price &&
+                            p.category === product.category &&
+                            p.description === product.description &&
+                            p.image_url === product.image_url &&
+                            p.start_date === product.start_date &&
+                            p.end_date === product.end_date
+                        );
+
+                        const totalStock = groupItems.reduce((sum, item) => sum + Number(item.stock), 0);
+
+                        grouped.push({
+                            ...product,
+                            stock: totalStock,
+                            groupedItems: groupItems,
+                        });
+
+                        seen.add(key);
+                    }
+                });
+
+                setProducts(response.data.data);          // full original list
+                setFilteredProducts(grouped);            // 👈 grouped view for All
+
             } else {
                 console.error("Invalid API response:", response.data);
             }
@@ -159,28 +376,35 @@ useEffect(() => {
 
     const handleEdit = (product) => {
         setIsAddModalOpen(false);
-        setIsEditModalOpen(true);
     
-        setSelectedProduct(product);
+        const matchingGroup = product.groupedItems || [product]; // ✅ fallback for ungrouped items
     
-        // ✅ Convert stored sizes string back into an array
-        const productSizes = product.sizes ? product.sizes.split(",").map(size => size.trim()) : [];
+        const groupedSizes = {};
+        matchingGroup.forEach((item) => {
+            groupedSizes[item.sizes] = item.stock;
+        });
     
         setFormData({
             name: product.name,
             price: product.price,
             category: product.category,
-            stock: product.stock,
             description: product.description,
             start_date: product.start_date,
             end_date: product.end_date,
             image: null,
             previewImage: product.image_url || null,
-            sizes: productSizes, // ✅ Fetch sizes from API
+            sizesWithStock: groupedSizes,
+            showCustomCategory: false,
+            isJpg: product.image_url?.toLowerCase().endsWith(".jpg"),
+            hasTransparentBackground: true,
+            noBackgroundDetected: false,
         });
+    
+        setSelectedProduct(product);
+        setSelectedProductGroup(matchingGroup);
+        setIsEditModalOpen(true);
     };
     
-
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -193,60 +417,70 @@ useEffect(() => {
             return;
         }
     
-        // ✅ Get file extension (lowercase)
         const fileExtension = file.name.split(".").pop().toLowerCase();
-    
-        // ✅ Allowed image types (Only PNG and JPG)
         if (!["jpg", "jpeg", "png"].includes(fileExtension)) {
-            alert("⚠️ Invalid file type. Please upload a PNG with a transparent background.");
+            alert("⚠️ Invalid file type. Only JPG or PNG allowed.");
             return;
         }
     
-        setIsProcessingImage(true); // Start processing state
+        setIsProcessingImage(true);
     
         const reader = new FileReader();
         reader.readAsDataURL(file);
     
         reader.onload = async () => {
             try {
-                const base64Image = reader.result.split(",")[1]; // Extract base64 data
-                console.log("📤 Sending Image for Processing...");
+                const base64Image = reader.result.split(",")[1];
     
-                const response = await fetch("http://127.0.0.1:8000/api/process-image", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ image: base64Image }),
-                });
+                if (fileExtension === "png") {
+                    // ✅ Resize PNG before processing
+                    const resizedDataUrl = await resizeImageToFixedSize(file, 1070, 1152);
+                    const resizedBase64 = resizedDataUrl.split(",")[1];
     
-                const result = await response.json();
+                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/process-image`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ image: resizedBase64 }),
+                    });
     
-                if (result.success && result.processed_image) {
-                    console.log("✅ Image processed successfully:", result.processed_image);
+                    const result = await response.json();
     
-                    if (fileExtension === "png") {
-                        checkIfBackgroundRemoved(file).then((isBackgroundRemoved) => {
-                            setFormData((prev) => ({
-                                ...prev,
-                                image: result.processed_image,
-                                previewImage: `/storage/${result.processed_image.replace("storage/", "")}`,
-                                isJpg: false,
-                                hasTransparentBackground: isBackgroundRemoved, // ✅ Confirmed transparency
-                                noBackgroundDetected: !isBackgroundRemoved, // ✅ Set flag for UI display
-                            }));
-                        });
-                    } else {
+                    if (result.success && result.processed_image) {
+                        const isTransparent = await checkIfBackgroundRemoved(file);
+    
                         setFormData((prev) => ({
                             ...prev,
                             image: result.processed_image,
                             previewImage: `/storage/${result.processed_image.replace("storage/", "")}`,
-                            isJpg: true, // ✅ JPG detected
-                            hasTransparentBackground: false, // ❌ JPGs don't have transparency
-                            noBackgroundDetected: false, // JPGs are expected to have backgrounds
+                            isJpg: false,
+                            hasTransparentBackground: isTransparent,
+                            noBackgroundDetected: !isTransparent,
                         }));
+                    } else {
+                        alert(`Image processing failed: ${result.message || "Unknown error"}`);
                     }
                 } else {
-                    console.error("❌ Image Processing Failed:", result.message, result.error);
-                    alert(`Image processing failed: ${result.message || "Unknown error"}`);
+                    // ✅ JPG - no resizing needed, just upload
+                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/process-image`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ image: base64Image }),
+                    });
+    
+                    const result = await response.json();
+    
+                    if (result.success && result.processed_image) {
+                        setFormData((prev) => ({
+                            ...prev,
+                            image: result.processed_image,
+                            previewImage: `/storage/${result.processed_image.replace("storage/", "")}`,
+                            isJpg: true,
+                            hasTransparentBackground: false,
+                            noBackgroundDetected: false,
+                        }));
+                    } else {
+                        alert(`Image processing failed: ${result.message || "Unknown error"}`);
+                    }
                 }
             } catch (error) {
                 console.error("🚨 Server Error:", error);
@@ -296,7 +530,38 @@ useEffect(() => {
             };
         });
     };
+
+    const resizeImageToFixedSize = (file, width = 1070, height = 1152) => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                canvas.width = width;
+                canvas.height = height;
     
+                const ctx = canvas.getContext("2d");
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+                // Maintain aspect ratio
+                const aspectRatio = img.width / img.height;
+                let drawWidth = width;
+                let drawHeight = height;
+    
+                if (aspectRatio > width / height) {
+                    drawHeight = width / aspectRatio;
+                } else {
+                    drawWidth = height * aspectRatio;
+                }
+    
+                const offsetX = (width - drawWidth) / 2;
+                const offsetY = (height - drawHeight) / 2;
+    
+                ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                resolve(canvas.toDataURL("image/png"));
+            };
+            img.src = URL.createObjectURL(file);
+        });
+    };
     
     
     const handleAddProduct = async () => {
@@ -306,44 +571,53 @@ useEffect(() => {
         }
     
         setIsAddingProduct(true);
-    
         const token = localStorage.getItem("token");
+    
         if (!token) {
             alert("🚨 Unauthorized: No token found.");
             setIsAddingProduct(false);
             return;
         }
     
-        // ✅ Ensure sizes is always an array and convert to comma-separated string
-        const selectedSizes = Array.isArray(formData.sizes) && formData.sizes.length > 0 
-            ? formData.sizes.join(", ") 
-            : "";
-    
-        const productData = {
+        // ✅ Define shared fields (finally!)
+        const sharedFields = {
             name: formData.name,
             price: formData.price,
             category: formData.category,
-            stock: formData.stock,
             description: formData.description,
-            start_date: formData.start_date ? new Date(formData.start_date).toISOString().split("T")[0] : "",
-            end_date: formData.end_date ? new Date(formData.end_date).toISOString().split("T")[0] : "",
+            start_date: formData.start_date
+                ? new Date(formData.start_date).toISOString().split("T")[0]
+                : "",
+            end_date: formData.end_date
+                ? new Date(formData.end_date).toISOString().split("T")[0]
+                : "",
             image_url: formData.image,
-            sizes: selectedSizes, // ✅ Store as a comma-separated string
         };
     
         try {
-            console.log("📡 Uploading product...");
-            const response = await axios.post("http://127.0.0.1:8000/api/products", productData, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            for (const [sizes, stock] of Object.entries(formData.sizesWithStock)) {
+                const form = new FormData();
+                form.append("name", sharedFields.name);
+                form.append("price", sharedFields.price);
+                form.append("category", sharedFields.category);
+                form.append("description", sharedFields.description);
+                form.append("start_date", sharedFields.start_date);
+                form.append("end_date", sharedFields.end_date);
+                form.append("stock", stock);
+                form.append("sizes", sizes);
+                form.append("image_url", sharedFields.image_url);
     
-            if (response.data.success) {
-                toast.success("Product added successfully!", { position: "top-right" });
-                setIsAddModalOpen(false);
-                fetchProducts();
-            } else {
-                toast.error("Failed to add product: " + response.data.message, { position: "top-right" });
+                await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/products`, form, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "multipart/form-data",
+                    },
+                });
             }
+    
+            toast.success("Products added successfully!", { position: "top-right" });
+            setIsAddModalOpen(false);
+            fetchProducts(); // Refresh product list
         } catch (error) {
             console.error("Error adding product:", error);
             alert("An error occurred: " + error.message);
@@ -352,7 +626,6 @@ useEffect(() => {
         }
     };
     
-    
     const handleEditImage = () => {
         if (!formData.previewImage) {
             alert("⚠️ No image to edit.");
@@ -360,7 +633,7 @@ useEffect(() => {
         }
     
         // ✅ Fix: Ensure the correct public URL
-        const baseURL = "http://127.0.0.1:8000/storage/";
+        const baseURL = `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/`;
         const cleanImagePath = formData.previewImage.replace("/storage/", ""); // Remove `/storage/` if present
         const absoluteURL = formData.previewImage.startsWith("http")
             ? formData.previewImage
@@ -386,7 +659,7 @@ useEffect(() => {
         if (!token) return;
     
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/products/${productId}/toggle-visibility`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${productId}/toggle-visibility`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -421,72 +694,89 @@ useEffect(() => {
     
     
     const handleUpdateProduct = async () => {
-        if (!selectedProduct) return;
+        if (!selectedProductGroup || selectedProductGroup.length === 0) return;
     
-        setIsSavingChanges(true);
+        const hasEmptyStock = Object.entries(formData.sizesWithStock).some(
+            ([sizes, stock]) => stock === "" || stock === null || isNaN(Number(stock))
+        );
     
-        const token = localStorage.getItem("token");
-        if (!token) {
-            setIsSavingChanges(false);
+        if (hasEmptyStock) {
+            toast.error("❌ Please fill in valid stock values for all selected sizes.", {
+                position: "top-right",
+            });
             return;
         }
     
-        const formattedStartDate = formData.start_date 
-            ? new Date(formData.start_date).toISOString().split("T")[0] 
-            : "";
-        const formattedEndDate = formData.end_date 
-            ? new Date(formData.end_date).toISOString().split("T")[0] 
-            : "";
+        setIsSavingChanges(true);
+        const token = localStorage.getItem("token");
+        if (!token) return;
     
-        const updateData = new FormData();
-        updateData.append("name", formData.name);
-        updateData.append("price", formData.price);
-        updateData.append("category", formData.category);
-        updateData.append("stock", formData.stock);
-        updateData.append("description", formData.description);
-        updateData.append("start_date", formattedStartDate);
-        updateData.append("end_date", formattedEndDate);
-    
-        // ✅ Convert sizes array into a string before sending
-        if (Array.isArray(formData.sizes) && formData.sizes.length > 0) {
-            updateData.append("sizes", formData.sizes.join(", ")); // Convert array to string
-        }
-    
-        if (formData.image && formData.image instanceof File) {
-            updateData.append("image", formData.image);
-        } else if (formData.previewImage) {
-            const relativeImagePath = formData.previewImage.replace("http://127.0.0.1:8000/storage/", "");
-            updateData.append("image_url", relativeImagePath);
-        }
+        const existingSizes = selectedProductGroup.map((item) => item.sizes);
+        const sharedFields = {
+            name: formData.name,
+            price: formData.price,
+            category: formData.category,
+            description: formData.description,
+            start_date: formData.start_date
+                ? new Date(formData.start_date).toISOString().split("T")[0]
+                : "",
+            end_date: formData.end_date
+                ? new Date(formData.end_date).toISOString().split("T")[0]
+                : "",
+            image_url: formData.previewImage.replace(
+                `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/`,
+                ""
+            ),
+        };
     
         try {
-            const response = await axios.post(
-                `http://127.0.0.1:8000/api/products/${selectedProduct.id}/update`,
-                updateData,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "multipart/form-data",
-                    },
-                }
-            );
-    
-            if (response.data.success) {
-                toast.success("Product updated successfully!", { position: "top-right" });
-                setIsEditModalOpen(false);
-                fetchProducts();
-            } else {
-                toast.error("Failed to update product: " + response.data.message, { position: "top-right" });
+            // 🔁 Update existing sizes
+            for (const item of selectedProductGroup) {
+                const stock = Number(formData.sizesWithStock[item.sizes] || 0);
+                await axios.post(
+                    `${process.env.NEXT_PUBLIC_API_URL}/products/${item.id}/update`,
+                    { ...sharedFields, stock },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
             }
+    
+            // ➕ Insert new sizes
+            for (const [sizes, stock] of Object.entries(formData.sizesWithStock)) {
+                if (!existingSizes.includes(sizes)) {
+                    await axios.post(
+                        `${process.env.NEXT_PUBLIC_API_URL}/products`,
+                        { ...sharedFields, sizes: sizes, stock: Number(stock) },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                }
+            }
+    
+            toast.success(`Product "${formData.name}" updated successfully!`, {
+                position: "top-right",
+            });
+            setIsEditModalOpen(false);
+            fetchProducts();
         } catch (error) {
-            console.error("Error updating product:", error.response?.data || error);
-            alert("An error occurred: " + (error.response?.data?.message || "Unknown error"));
+            console.error("Update error:", error);
+            toast.error("❌ Failed to update product", { position: "top-right" });
         } finally {
             setIsSavingChanges(false);
         }
     };
     
-    
+    useEffect(() => {
+        const invalidStock = Object.values(formData.sizesWithStock || {}).some(
+            (v) => v === "" || isNaN(Number(v))
+        );
+        if (invalidStock && Object.keys(formData.sizesWithStock).length > 0) {
+            toast.error("⚠️ Please fill in all stock fields correctly.", {
+                id: "edit-stock-warning",
+                position: "top-right",
+            });
+        } else {
+            toast.dismiss("edit-stock-warning");
+        }
+    }, [formData.sizesWithStock]);
     
     const columns = [
         {
@@ -505,7 +795,7 @@ useEffect(() => {
             sortable: true,
         },
         {
-            name: "Stock",
+            name: "Total Stock",
             selector: (row) => row.stock,
             sortable: true,
         },
@@ -539,48 +829,100 @@ useEffect(() => {
         <meta name="description" content="Manage your profile and settings on Gown Rental." />
         <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
     </Head>
-        <div className="flex h-screen bg-white dark:bg-[#0F172A]">
+    <div className={`${darkMode ? "dark" : ""} flex h-screen bg-white dark:bg-[#0F172A]`}>
             {/* Sidebar */}
-            <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-
-            {/* Main Content */}
-            <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-16"} w-full overflow-x-hidden`}>
+            {/* Floating burger (mobile only) */}
+             {!isSidebarOpen && (
+                               <button
+                                   onClick={() => setIsSidebarOpen(true)}
+                                   className={`fixed top-2 left-4 z-50 bg-pink-600 text-white p-3 rounded-full shadow-lg ${
+                                   isSidebarOpen ? "hidden" : "block"
+                                   } md:hidden`}
+                               >
+                           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                           </svg>
+                       </button>
+                       )}
+           
+                       {/* ✅ Dark overlay for mobile when sidebar is open */}
+                       {isSidebarOpen && (
+                       <div
+                           className="fixed inset-0 bg-black bg-opacity-40 z-40 md:hidden"
+                           onClick={() => setIsSidebarOpen(false)}
+                       />
+                       )}
+           
+           
+                           <AdminSidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+           
+                   <div className={`flex-1 transition-all duration-300 md:${isSidebarOpen ? "ml-60" : "ml-16"} min-w-0`}>
                 {/* Header */}
-                <header className="fixed top-0 w-full flex items-center justify-end bg-white dark:bg-[#0F172A] p-4 shadow-md z-10">
-                    <h1 className="text-lg font-bold dark:text-white mr-auto">Gown Rental</h1>
-                </header>
+                  <Header isSidebarOpen={isSidebarOpen} />
 
                 {/* Page Content */}
                 <main className="p-6 mt-16">
+                <div className="bg-gray-100 p-6 rounded-lg shadow-md mb-6">
                     {/* Breadcrumb */}
-                    <nav className="my-6 flex px-5 py-3 text-gray-700 rounded-lg bg-gray-50 dark:bg-[#1E293B]" aria-label="Breadcrumb">
-                        <ol className="inline-flex items-center space-x-1 md:space-x-3">
-                            <li className="inline-flex items-center">
-                                <a href="#" className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
-                                    </svg>
-                                    Home
-                                </a>
-                            </li>
-                            <li>
-                                <div className="flex items-center">
-                                    <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                    <a href="#" className="ml-1 text-sm font-medium text-gray-700 hover:text-gray-900 md:ml-2 dark:text-gray-400 dark:hover:text-white">
-                                        Products
-                                    </a>
-                                </div>
-                            </li>
-                        </ol>
-                    </nav>
+
 
                 {/* Title Section */}
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 text-center">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-3 md:mb-0">Products</h1>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
+                {/* Title */}
+                <h1 className="text-3xl font-bold text-gray-800">Products</h1>
 
-                    {/* Centered Button on Mobile */}
+                {/* Buttons Row */}
+                <div className="flex flex-wrap items-center gap-2">
+
+                <button
+                        onClick={exportToCSV}
+                        disabled={isExportingCSV}
+                        className="flex items-center gap-2 bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        >
+                        {isExportingCSV ? (
+                            <>
+                            <Loader2 className="animate-spin w-4 h-4" />
+                            Exporting...
+                            </>
+                        ) : (
+                            "Export CSV"
+                        )}
+                        </button>
+
+
+                        <button
+                            onClick={exportToPDF}
+                            disabled={isExportingPDF}
+                            className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            >
+                            {isExportingPDF ? (
+                                <>
+                                <Loader2 className="animate-spin w-4 h-4" />
+                                Exporting...
+                                </>
+                            ) : (
+                                "Export PDF"
+                            )}
+                            </button>
+
+
+                </div>
+                </div>
+
+
+                {/* Category Buttons & Add Product */}
+                <div className="flex flex-wrap justify-between items-center gap-2 p-3 bg-white shadow-md">
+                    {/* Burger Button */}
+                    <button
+                        onClick={() => setShowCategoryFilters(!showCategoryFilters)}
+                        className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-pink-600 text-white shadow-md hover:bg-pink-700 transition"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <span>{showCategoryFilters ? "Hide Categories" : "Filter Categories"}</span>
+                    </button>
+
                     <div className="flex justify-center">
                         <button
                             onClick={() => {
@@ -588,97 +930,125 @@ useEffect(() => {
                                 setIsEditModalOpen(false);
                                 setIsAddModalOpen(true);
                                 setFormData({
-                                    name: "",
-                                    price: "",
-                                    category: "",
-                                    stock: "",
-                                    description: "",
-                                    start_date: "",
-                                    end_date: "",
-                                    image: null,
-                                    previewImage: null,
+                                  name: "",
+                                  price: "0",
+                                  category: "",
+                                  description: "",
+                                  start_date: "",
+                                  end_date: "",
+                                  image: null,
+                                  previewImage: null,
+                                  sizesWithStock: {}, // ✅ Add this
+                                  showCustomCategory: false,
                                 });
-                            }}
+                              }}
+                              
                             className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 shadow-md transition"
                         >
                             <PlusCircle size={20} /> Add Product
                         </button>
                     </div>
-                </div>
-
-                {/* Category Buttons & Add Product */}
-                    <div className="flex flex-wrap justify-between items-center gap-2 p-3 bg-gray-100 rounded-lg shadow-md">
-                        {/* Category Filter Buttons */}
-                        <div className="flex flex-wrap gap-2">
-                            {/* "All" Button (Now a Dark Primary Color) */}
-                            <div className="flex items-center gap-2">
-                                <button 
-                                    onClick={() => filterByCategory(null)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition ${
-                                        selectedCategory === null ? "bg-gray-800 text-white" : "bg-gray-600 text-white hover:bg-gray-700"
-                                    }`}
-                                >
-                                    All ({products.length})
-                                </button>
-
-                                <button 
-                                    onClick={() => filterByCategory("Hidden Products")}
-                                    className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition ${
-                                        selectedCategory === "Hidden Products" ? "bg-red-600 text-white" : "bg-red-500 text-white hover:bg-red-700"
-                                    }`}
-                                >
-                                    Hidden Products
-                                </button>
-
-                            </div>
 
 
-                            {/* Dynamic Colorful Category Buttons */}
-                            {categories.map((category, index) => {
-                        const categoryColors = [
-                            "bg-blue-500 hover:bg-blue-600 text-white",
-                            "bg-green-500 hover:bg-green-600 text-white",
-                            "bg-purple-500 hover:bg-purple-600 text-white",
-                            "bg-red-500 hover:bg-red-600 text-white",
-                            "bg-pink-500 hover:bg-pink-600 text-white",
-                            "bg-yellow-500 hover:bg-yellow-600 text-black",
-                            "bg-indigo-500 hover:bg-indigo-600 text-white",
-                        ];
-                        const buttonColor = categoryColors[index % categoryColors.length] === "bg-gray-200"
-                        ? "bg-gray-500" // Darken the gray color
-                        : categoryColors[index % categoryColors.length];
+                    {/* Collapsible Category Buttons */}
+                    {showCategoryFilters && (
+                        <div className="flex flex-wrap items-center gap-3 mt-4 px-2 py-2 bg-gray-100 shadow-md mx-auto rounded-md">
+                            {[
+                                {
+                                    label: "All",
+                                    icon: <Boxes size={16} />,
+                                    value: null,
+                                    count: filteredProducts.length,
+                                },
+                                {
+                                    label: "Hidden",
+                                    icon: <EyeOff size={16} />,
+                                    value: "Hidden Products",
+                                    count: products.filter((p) => p.is_hidden === 1).length,
+                                },
+                            ].map(({ label, icon, value, count }) => {
+                                const isActive = selectedCategory === value;
+                                return (
+                                    <button
+                                        key={label}
+                                        onClick={() => filterByCategory(value)}
+                                        className={`flex items-center gap-2 text-sm px-4 py-2 rounded-full transition font-medium ${
+                                            isActive
+                                                ? "bg-pink-500 text-white shadow-md"
+                                                : "text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                    >
+                                        {icon}
+                                        <span>{label} ({count})</span>
+                                    </button>
+                                );
+                            })}
 
-                        const textColor = buttonColor.includes("gray") ? "text-black" : "text-white";
+                            {/* Dynamic Category Buttons */}
+                            {categories.map((category) => {
+                                const isActive = selectedCategory === category;
+                                const count = getCategoryCounts(products)[category] || 0;
 
                                 return (
                                     <button
-                                    key={category}
-                                    onClick={() => filterByCategory(category)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition ${buttonColor} ${textColor} ${
-                                        selectedCategory === category ? "ring-2 ring-black ring-offset-2" : ""
-                                    }`}
-                                >
-                                    {category} ({getCategoryCounts(products)[category] || 0})
-                                </button>               
+                                        key={category}
+                                        onClick={() => filterByCategory(category)}
+                                        className={`flex items-center gap-2 text-sm px-4 py-2 rounded-full transition font-medium ${
+                                            isActive
+                                                ? "bg-pink-500 text-white shadow-md"
+                                                : "text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                        disabled={isCategoryLoading}
+                                    >
+                                        {isCategoryLoading && isActive ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <Tag size={16} />
+                                        )}
+                                        <span>{category} ({count})</span>
+                                    </button>
                                 );
                             })}
                         </div>
-                    </div>
-
+                    )}
+                </div>
 
                     {/* Table Container */}
                     <div className="bg-white p-6 rounded-lg shadow-md">
                         <div className="overflow-x-auto"> {/* ✅ Ensures horizontal scroll only when needed */}
                             {/* Search Bar */}
                             <div className="flex justify-end mb-4">
+                            <div className="relative flex items-center w-full sm:w-80">
                                 <input
-                                    type="text"
-                                    placeholder="Search products..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="border border-gray-300 p-2 rounded-md w-64 focus:ring focus:ring-blue-300"
+                                type="text"
+                                placeholder="Search products..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-5 pr-12 py-2 rounded-full border border-pink-200 focus:ring-2 focus:ring-pink-300 text-sm shadow-sm"
                                 />
+                                <button
+                                type="button"
+                                className="absolute right-1 top-1 bottom-1 bg-pink-600 hover:bg-pink-700 text-white rounded-full p-2 transition"
+                                disabled
+                                >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M21 21l-4.35-4.35M16 10a6 6 0 11-12 0 6 6 0 0112 0z"
+                                    />
+                                </svg>
+                                </button>
                             </div>
+                            </div>
+
 
                             <DataTable 
                                 columns={columns} 
@@ -689,13 +1059,13 @@ useEffect(() => {
                             />
                         </div>
                     </div>
-
+                    </div>
                 </main>
             </div>
 
-            {isAddModalOpen && (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 overflow-auto">
-        <div className="relative bg-white p-6 rounded-lg shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        {isAddModalOpen && (
+        <div className="fixed inset-0 flex items-start justify-center bg-black bg-opacity-50 z-50 overflow-y-auto pt-10 pb-10">
+        <div className="relative bg-white p-4 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 
             {/* Close Button */}
             <button 
@@ -706,7 +1076,8 @@ useEffect(() => {
             </button>
 
             <h2 className="text-lg font-semibold text-gray-800 mb-2 text-center">Add Product</h2>
-
+            
+            <div className="mt-4 px-6 pb-6 overflow-y-auto" style={{ maxHeight: "70vh" }}>
             {/* ✅ Add Product Form */}
             <div className="flex flex-col gap-2">
                 <input 
@@ -718,40 +1089,76 @@ useEffect(() => {
                     className="border p-1 rounded-md w-full text-xs"
                     required
                 />
-
+                <div className="flex items-center gap-2 w-full">
+                <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Price:</label>
                 <input 
                     type="number" 
                     name="price" 
-                    placeholder="Price *" 
+                    placeholder="0" 
                     value={formData.price} 
                     onChange={handleChange} 
                     className="border p-1 rounded-md w-full text-xs"
                     required
                 />
+                <span className="text-sm text-gray-700 font-semibold whitespace-nowrap">
+                    ₱{Number(formData.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+                </div>
 
-                <input 
-                    type="text" 
-                    name="category" 
-                    placeholder="Category *" 
-                    value={formData.category} 
-                    onChange={handleChange} 
-                    className="border p-1 rounded-md w-full text-xs"
-                    required
-                />
+                <p className="text-xs text-gray-600 mt-1">
+                Total Stock: <strong>{Object.values(formData.sizesWithStock).reduce((sum, val) => sum + Number(val || 0), 0)}</strong>
+                </p>
 
-                <input 
-                    type="number" 
-                    name="stock" 
-                    placeholder="Stock *" 
-                    value={formData.stock} 
-                    onChange={handleChange} 
-                    className="border p-1 rounded-md w-full text-xs"
-                    required
-                />
+               {/* ✅ Category Combobox + Add New Toggle */}
+                <div className="flex flex-col gap-1">
+                    {!formData.showCustomCategory ? (
+                        <>
+                            <select
+                                name="category"
+                                value={formData.category}
+                                onChange={handleChange}
+                                className="border p-1 rounded-md w-full text-xs"
+                                required
+                            >
+                                <option value="">-- Select Category --</option>
+                                {categories.map((cat) => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={() => setFormData((prev) => ({ ...prev, showCustomCategory: true, category: "" }))}
+                                className="text-xs text-blue-600 hover:underline mt-1"
+                            >
+                                + Add New Category
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <label className="text-xs font-semibold">New Category *</label>
+                            <input 
+                                type="text" 
+                                name="category" 
+                                placeholder="Enter new category" 
+                                value={formData.category} 
+                                onChange={handleChange} 
+                                className="border p-1 rounded-md w-full text-xs"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setFormData((prev) => ({ ...prev, showCustomCategory: false, category: "" }))}
+                                className="text-xs text-red-600 hover:underline mt-1"
+                            >
+                                Cancel New Category
+                            </button>
+                        </>
+                    )}
+                </div>
 
                 <textarea 
                     name="description" 
-                    placeholder="Description *" 
+                    placeholder="Description * Style * Neckline * Back * Length * Fabric * Fit * Rental Includes *" 
                     value={formData.description} 
                     onChange={handleChange} 
                     className="border p-1 rounded-md w-full text-xs"
@@ -759,38 +1166,63 @@ useEffect(() => {
                 ></textarea>
 
                 {/* ✅ Size Selection (Checkboxes) */}
-                <div className="flex flex-wrap gap-2">
-                    {["Small", "Medium", "Large", "Extra Large", "Extra Extra Large"].map((size) => (
-                        <label key={size} className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-md shadow-md cursor-pointer">
+                <div className="flex flex-wrap gap-2 w-full">
+                    {["Small", "Medium", "Large", "Extra Large", "Extra Extra Large"].map((sizes) => (
+                        <label
+                        key={sizes}
+                        className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-gray-100 px-3 py-2 rounded-md shadow-md cursor-pointer w-full"
+                        >
+                        <div className="flex items-center gap-2">
                             <input
-                                type="checkbox"
-                                value={size}
-                                checked={Array.isArray(formData.sizes) && formData.sizes.includes(size)} // ✅ Fix applied
-                                onChange={(e) => {
-                                    const selected = e.target.checked
-                                        ? [...(Array.isArray(formData.sizes) ? formData.sizes : []), size] // ✅ Ensure array
-                                        : (Array.isArray(formData.sizes) ? formData.sizes.filter((s) => s !== size) : []); // ✅ Ensure array
-                                    setFormData((prev) => ({ ...prev, sizes: selected }));
-                                }}
-                                className="hidden"
+                            type="checkbox"
+                            className="w-5 h-5 accent-indigo-500"
+                            checked={formData.sizesWithStock?.[sizes] !== undefined}
+                            onChange={(e) => {
+                                const updated = { ...formData.sizesWithStock };
+                                if (e.target.checked) {
+                                updated[sizes] = "";
+                                } else {
+                                delete updated[sizes];
+                                }
+                                setFormData((prev) => ({ ...prev, sizesWithStock: updated }));
+                            }}
                             />
-                            <span className="w-4 h-4 border border-gray-500 rounded-md flex items-center justify-center">
-                                {Array.isArray(formData.sizes) && formData.sizes.includes(size) && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
-                            </span>
-                            <span className="text-sm">{size}</span>
+                            <span className="text-sm">{sizes}</span>
+                        </div>
+
+                        {formData.sizesWithStock?.[sizes] !== undefined && (
+                            <input
+                            type="number"
+                            placeholder="Stock"
+                            value={formData.sizesWithStock[sizes]}
+                            onChange={(e) => {
+                                const updated = {
+                                ...formData.sizesWithStock,
+                                [sizes]: e.target.value,
+                                };
+                                setFormData((prev) => ({ ...prev, sizesWithStock: updated }));
+                            }}
+                            className="w-24 p-1 text-xs border rounded"
+                            min="0"
+                            />
+                        )}
                         </label>
                     ))}
-                </div>
+                    </div>
+
 
                 {/* ✅ Date Pickers */}
+                <label className="text-xs font-semibold">Availability : </label>
                 <DatePicker 
                     selected={formData.start_date ? new Date(formData.start_date) : null}
                     onChange={(date) => handleDateChange(date, "start_date")}
                     dateFormat="yyyy-MM-dd"
                     placeholderText="Start Date *"
-                    className="border p-1 rounded-md w-full text-xs relative z-50"
+                    className="border p-1 rounded-md w-full text-xs relative"
                     required
-                />
+                    minDate={new Date()} // ⬅️ This disables all past dates
+                    />
+
 
                     {formData.end_date && !validateDates().endDateValid && (
                         <p className="text-red-600 text-xs font-semibold mt-1">
@@ -799,14 +1231,24 @@ useEffect(() => {
                     )}
 
 
-                <DatePicker 
+                    <DatePicker 
                     selected={formData.end_date ? new Date(formData.end_date) : null}
                     onChange={(date) => handleDateChange(date, "end_date")}
                     dateFormat="yyyy-MM-dd"
                     placeholderText="End Date *"
-                    className="border p-1 rounded-md w-full text-xs"
+                    className="border p-1 rounded-md w-full text-xs relative"
                     required
-                />
+                    minDate={
+                        formData.start_date
+                        ? (() => {
+                            const min = new Date(formData.start_date);
+                            min.setDate(min.getDate() + 2); // ✅ At least 2 days after start
+                            return min;
+                            })()
+                        : new Date()
+                    }
+                    />
+
 
                 {/* 🔹 Upload Guidelines */}
                 <div className="bg-yellow-100 p-3 rounded-md text-xs text-yellow-700 border border-yellow-400">
@@ -823,10 +1265,10 @@ useEffect(() => {
                 {formData.previewImage && (
                 <div className="flex flex-col items-center gap-1">
                     <img 
-                        src={formData.previewImage.startsWith("/") 
-                            ? `http://127.0.0.1:8000${formData.previewImage}` 
-                            : formData.previewImage
-                        }
+                       src={formData.previewImage.startsWith("/") 
+                        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}${formData.previewImage}` 
+                        : formData.previewImage
+                    }                    
                         alt="Product Preview"
                         className="w-2/3 max-h-24 object-contain rounded-md mt-1"
                         onError={(e) => e.target.style.display = "none"}
@@ -871,38 +1313,38 @@ useEffect(() => {
                 <button 
                     onClick={handleAddProduct} 
                     disabled={
-                        isAddingProduct || 
-                        isProcessingImage || 
+                        isAddingProduct ||
+                        isProcessingImage ||
                         !formData.name || 
                         !formData.price || 
                         !formData.category || 
-                        !formData.stock || 
                         !formData.description || 
                         !formData.start_date || 
                         !formData.end_date || 
                         !formData.image || 
-                        !(Array.isArray(formData.sizes) && formData.sizes.length > 0) || 
-                        !formData.hasTransparentBackground || 
+                        sizeCount === 0 || 
+                        hasEmptyStock || 
+                        !formData.hasTransparentBackground ||
                         !validateDates().endDateValid
-                    }
-                    
-                    
+                    }             
                     className={`mt-2 px-2 py-1 rounded-md w-full text-xs flex items-center justify-center space-x-2 transition-all ${
                         isAddingProduct || 
                         isProcessingImage || 
                         !formData.name || 
                         !formData.price || 
                         !formData.category || 
-                        !formData.stock || 
                         !formData.description || 
                         !formData.start_date || 
                         !formData.end_date || 
                         !formData.image || 
-                        !(Array.isArray(formData.sizes) && formData.sizes.length > 0) || 
-                        !formData.hasTransparentBackground
-                            ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                            : "bg-green-600 text-white hover:bg-green-700"
+                        sizeCount === 0 || 
+                        hasEmptyStock || 
+                        !formData.hasTransparentBackground || 
+                        !validateDates().endDateValid
+                        ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
                     }`}
+
                 >
                     {isAddingProduct || isProcessingImage ? (
                         <>
@@ -916,7 +1358,7 @@ useEffect(() => {
                         <span>Add Product</span>
                     )}
                 </button>
-
+                </div>
             </div>
         </div>
     </div>
@@ -956,8 +1398,8 @@ useEffect(() => {
 
 
 {isEditModalOpen && (
- <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 overflow-auto">
-<div className="relative bg-white p-4 rounded-lg shadow-lg max-w-3xl w-full max-h-[65vh] overflow-y-auto">
+    <div className="fixed inset-0 flex items-start justify-center bg-black bg-opacity-50 z-50 overflow-y-auto pt-10 pb-10">
+<div className="relative bg-white p-4 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
 
             {/* Close Button */}
             <button 
@@ -968,30 +1410,101 @@ useEffect(() => {
             </button>
 
             <h2 className="text-xl font-semibold text-gray-800 mb-3 text-center">Edit Product</h2>
-
+            <div className="mt-4 px-6 pb-6 overflow-y-auto" style={{ maxHeight: "70vh" }}>
             {/* ✅ Edit Product Form */}
             <div className="flex flex-col gap-1">
             <input type="text" name="name" placeholder="Product Name" value={formData.name} onChange={handleChange} className="border p-2 rounded-md w-full text-sm" />
-            <input type="number" name="price" placeholder="Price" value={formData.price} onChange={handleChange} className="border p-2 rounded-md w-full text-sm" />
-            <input type="text" name="category" placeholder="Category" value={formData.category} onChange={handleChange} className="border p-2 rounded-md w-full text-sm" />
-            <input 
-                type="number" 
-                name="stock" 
-                placeholder="Stock" 
-                value={formData.stock} 
-                disabled
-                title="You may edit this stock in inventory"
-                className="border p-2 rounded-md w-full text-sm cursor-not-allowed bg-gray-200 text-gray-600"
-            />
-            <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="border p-2 rounded-md w-full text-sm"></textarea>
+            <div className="flex items-center gap-2 w-full">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Price:</label>
+                <input 
+                    type="number" 
+                    name="price" 
+                    placeholder="Price" 
+                    value={formData.price} 
+                    onChange={handleChange} 
+                    className="border p-2 rounded-md w-1/2 text-sm" 
+                />
+                <span className="text-sm text-gray-700 font-semibold">
+                    {formData.price ? `₱${Number(formData.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ""}
+                </span>
+            </div>
 
-            <DatePicker 
+          {/* ✅ Category Combobox + Add New Toggle (Edit Modal) */}
+            {/* ✅ Category Combobox + Add New Toggle (Edit Modal) */}
+            <div className="flex flex-col gap-1 mb-2">
+                {!formData.showCustomCategory ? (
+                    <>
+                      
+                        <select
+                            name="category"
+                            value={formData.category}
+                            onChange={handleChange}
+                            className="border p-2 rounded-md w-full text-sm"
+                            required
+                        >
+                            <option value="">-- Select Category --</option>
+                            {categories.map((cat) => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, showCustomCategory: true, category: "" }))}
+                            className="text-xs text-blue-600 hover:underline mt-1"
+                        >
+                            + Add New Category
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <label className="text-xs font-semibold">New Category *</label>
+                        <input 
+                            type="text" 
+                            name="category" 
+                            placeholder="Enter new category" 
+                            value={formData.category} 
+                            onChange={handleChange} 
+                            className="border p-2 rounded-md w-full text-sm"
+                            required
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, showCustomCategory: false, category: "" }))}
+                            className="text-xs text-red-600 hover:underline mt-1"
+                        >
+                            Cancel New Category
+                        </button>
+                    </>
+                )}
+            </div>
+
+
+            <input 
+            type="text" 
+            placeholder="Total Stock"
+            value={`Total Stock: ${selectedProductGroup?.reduce((sum, item) => sum + Number(item.stock), 0) || 0}`}
+            disabled
+            title="This is the total stock of all size variants in this group"
+            className="border p-2 rounded-md w-full text-sm cursor-not-allowed bg-gray-200 text-gray-600 font-semibold"
+            />
+
+
+            <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="border p-2 rounded-md w-full text-sm"></textarea>
+            <label className="text-xs font-semibold">Availability : </label>
+            <DatePicker  
                 selected={formData.start_date ? new Date(formData.start_date) : null}
                 onChange={(date) => handleDateChange(date, "start_date")}
                 dateFormat="yyyy-MM-dd"
                 placeholderText="Start Date"
                 className="border p-2 rounded-md w-full text-xs"
+                minDate={
+                    formData.start_date
+                        ? new Date(new Date(formData.start_date).getFullYear(), new Date(formData.start_date).getMonth(), 1)
+                        : new Date() // fallback to today
+                }
             />
+
+
 
                 {formData.end_date && !validateDates().endDateValid && (
                     <p className="text-red-600 text-xs font-semibold mt-1">
@@ -999,35 +1512,61 @@ useEffect(() => {
                     </p>
                 )}
 
-            <DatePicker 
-                selected={formData.end_date ? new Date(formData.end_date) : null}
-                onChange={(date) => handleDateChange(date, "end_date")}
-                dateFormat="yyyy-MM-dd"
-                placeholderText="End Date"
-                className="border p-2 rounded-md w-full text-xs"
-            />
+                    <DatePicker 
+                        selected={formData.end_date ? new Date(formData.end_date) : null}
+                        onChange={(date) => handleDateChange(date, "end_date")}
+                        dateFormat="yyyy-MM-dd"
+                        placeholderText="End Date"
+                        className="border p-2 rounded-md w-full text-xs"
+                        minDate={
+                            formData.start_date
+                                ? (() => {
+                                    const min = new Date(formData.start_date);
+                                    min.setDate(min.getDate() + 2); // ✅ Enforce 2 days after start
+                                    return min;
+                                })()
+                                : new Date()
+                        }
+                    />
+
 
                 {/* ✅ Size Selection (Checkboxes) */}
                 <div className="flex flex-wrap gap-2">
-                    {["Small", "Medium", "Large", "Extra Large", "Extra Extra Large"].map((size) => (
-                        <label key={size} className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-md shadow-md cursor-pointer">
-                            <input
-                                type="checkbox"
-                                value={size}
-                                checked={Array.isArray(formData.sizes) && formData.sizes.includes(size)}
-                                onChange={(e) => {
-                                    const selected = e.target.checked
-                                        ? [...formData.sizes, size]
-                                        : formData.sizes.filter((s) => s !== size);
-                                    setFormData((prev) => ({ ...prev, sizes: selected }));
-                                }}
-                                className="hidden"
-                            />
-                            <span className="w-4 h-4 border border-gray-500 rounded-md flex items-center justify-center">
-                                {formData.sizes.includes(size) && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
-                            </span>
-                            <span className="text-sm">{size}</span>
-                        </label>
+                    {["Small", "Medium", "Large", "Extra Large", "Extra Extra Large"].map((sizes) => (
+                        <label key={sizes} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-gray-100 px-3 py-2 rounded-md shadow-md cursor-pointer w-full">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                             className="w-5 h-5 accent-indigo-500"
+                            checked={formData.sizesWithStock?.[sizes] !== undefined}
+                            onChange={(e) => {
+                              const updated = { ...formData.sizesWithStock };
+                              if (e.target.checked) {
+                                updated[sizes] = ""; // default stock value
+                              } else {
+                                delete updated[sizes];
+                              }
+                              setFormData((prev) => ({ ...prev, sizesWithStock: updated }));
+                            }}
+                          />
+                          <span className="text-sm">{sizes}</span>
+                        </div>
+                      
+                        {formData.sizesWithStock?.[sizes] !== undefined && (
+                          <input
+                            type="number"
+                            placeholder="Stock"
+                            value={formData.sizesWithStock[sizes]}
+                            onChange={(e) => {
+                              const updated = { ...formData.sizesWithStock, [sizes]: e.target.value };
+                              setFormData((prev) => ({ ...prev, sizesWithStock: updated }));
+                            }}
+                            className="w-24 p-1 text-xs border rounded"
+                            min="0"
+                          />
+                        )}
+                      </label>
+                      
                     ))}
                 </div>
 
@@ -1048,7 +1587,7 @@ useEffect(() => {
                     <div className="flex flex-col items-center gap-2">
                         <img 
                             src={formData.previewImage.startsWith("/") 
-                                ? `http://127.0.0.1:8000${formData.previewImage}` 
+                                ? `${process.env.NEXT_PUBLIC_BACKEND_URL}${formData.previewImage}`  
                                 : formData.previewImage
                             }
                             alt="Product Preview"
@@ -1097,8 +1636,9 @@ useEffect(() => {
                         isSavingChanges || 
                         formData.isJpg || 
                         formData.noBackgroundDetected || 
-                        !validateDates().endDateValid
-                    }                    
+                        !validateDates().endDateValid || 
+                        Object.values(formData.sizesWithStock).some(v => v === "" || isNaN(Number(v)))
+                    }                        
                     
                     className={`mt-3 px-3 py-2 rounded-md w-full flex items-center justify-center space-x-2 ${
                         isSavingChanges || formData.isJpg || formData.noBackgroundDetected
@@ -1118,6 +1658,7 @@ useEffect(() => {
                         <span>Save Changes</span>
                     )}
                 </button>
+                </div>
             </div>
         </div>
     </div>

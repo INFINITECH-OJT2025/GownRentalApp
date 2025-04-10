@@ -10,6 +10,109 @@
     box-sizing: border-box;
   }
   
+  .ribbon-tag::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -6px;
+    width: 0;
+    height: 0;
+    border-top: 16px solid transparent;
+    border-bottom: 16px solid transparent;
+    border-left: 6px solid #be185d; /* darker pink tone */
+  }
+
+  .top-badge {
+    background-color: #db2777; /* Tailwind yellow-400 */
+    color: #fcfcfc;             /* Tailwind gray-800 */
+    font-size: 14px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 9999px;     /* Fully rounded pill */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    text-transform: uppercase;
+  }
+
+  
+  .burst-badge {
+    background-color: #db2777; /* Tailwind pink-600 */
+    color: white;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    text-align: center;
+    clip-path: polygon(
+      50% 0%,
+      61% 6%,
+      70% 0%,
+      78% 6%,
+      100% 0%,
+      94% 20%,
+      100% 30%,
+      94% 39%,
+      100% 50%,
+      94% 61%,
+      100% 70%,
+      94% 80%,
+      100% 100%,
+      78% 94%,
+      70% 100%,
+      61% 94%,
+      50% 100%,
+      39% 94%,
+      30% 100%,
+      22% 94%,
+      0% 100%,
+      6% 80%,
+      0% 70%,
+      6% 61%,
+      0% 50%,
+      6% 39%,
+      0% 30%,
+      6% 20%,
+      0% 0%,
+      22% 6%,
+      30% 0%,
+      39% 6%
+    );
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    width: fit-content;
+  }
+  
+  .burst-badge {
+    transition: transform 0.2s ease;
+  }
+  .burst-badge:hover {
+    transform: scale(1.05);
+  }
+
+  .new-triangle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    border-top: 60px solid #db2777; /* pink triangle */
+    border-right: 60px solid transparent;
+  }
+  
+  .new-triangle-text {
+    position: absolute;
+    top: 35px;
+    left: 0px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    transform: rotate(-45deg);
+    transform-origin: top left;
+    text-align: center;
+    text-transform: uppercase;
+    pointer-events: none;
+    width: 60px;
+    line-height: 1;
+  }
+  
   body {
     margin: 0;  /* Remove default margin */
     padding: 0; /* Remove default padding */
@@ -31,29 +134,90 @@
     border-radius: 8px !important;
 }
 
+.range-start,
+.range-end {
+  background-color: #9d174d !important; /* Tailwind's pink-800 */
+  color: white !important;
+  border-radius: 50% !important;
+}
+
+.range-selected {
+  background-color: #be185d !important; /* slightly lighter pink (around pink-700) */
+  color: white !important;
+  border-radius: 0 !important;
+}
+
+.range-preview {
+  background-color: #fbcfe8 !important; /* pink-100 */
+  color: #831843 !important; /* pink-900 text */
+}
+
+
 /* ✅ Make available dates green */
 .available-date {
-  background-color: #28a745 !important; /* Green */
-  color: white !important;
-  font-weight: bold !important;
-  border-radius: 8px !important;
-  transition: background-color 0.2s ease-in-out; /* Smooth transition */
+  background-color: #fce7f3 !important; /* Tailwind pink-100 */
+  color: #db2777 !important;            /* Tailwind pink-600 */
+  font-weight: 600 !important;
+  border-radius: 9999px !important;     /* Pill-shaped */
+  transition: background-color 0.2s ease-in-out;
 }
 
-/* ✅ Ensure Green Hover Effect */
 .available-date:hover {
-  background-color: #b62472 !important; /* Darker green on hover */
-  cursor: pointer; /* Indicate it's selectable */
+  background-color: #f9a8d4 !important; /* Tailwind pink-300 */
+  cursor: pointer;
 }
 
-/* ✅ Keep the selected date green */
+
+/* ✅ Fix Calendar Width to match parent container */
+.react-calendar {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.react-calendar {
+  font-size: 1.10rem;
+  line-height: 2;
+  height: 380px;
+
+}
+
+.react-calendar__viewContainer {
+  overflow-y: auto;
+}
+
+.react-calendar__tile {
+  padding: 0.25rem 0 !important;
+  min-height: 40px !important;
+}
+
+
+
 .react-calendar__tile--active,
 .react-calendar__tile--active:enabled:hover,
 .react-calendar__tile--active:enabled:focus {
-  background-color: #b62472 !important; /* Dark Green for Selected */
+  background-color: #db2777 !important; /* Tailwind pink-600 */
   color: white !important;
   font-weight: bold !important;
-  border-radius: 8px !important;
+  border-radius: 9999px !important;
+}
+.react-calendar__tile--disabled {
+  background-color: transparent !important;
+  color: #d1d5db !important; /* Tailwind gray-300 */
+  cursor: not-allowed;
+}
+
+/* Disable clicking on the month-year header */
+.react-calendar__navigation__label {
+  pointer-events: none;
+  cursor: default;
+  color: #c24; /* Optional: soften color */
+}
+
+.calendar-wrapper {
+  height: 340px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Ensure Table Header is Centered & Properly Sized */

@@ -9,47 +9,46 @@ export function BookProvider({ children }) {
     const fetchBookings = async () => {
         const token = localStorage.getItem("token");
         if (!token) return;
-    
+
         try {
-            const response = await axios.get("http://127.0.0.1:8000/api/user/bookings", {
+            const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/user/bookings`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-    
+
             if (response.data.success) {
                 setBookingCount(response.data.bookings.length);
             }
         } catch (error) {
-            if (!error.response) {
-                alert("⚠ Network Error! Please check your connection.");
-            } else {
-                alert(`⚠ Error fetching bookings: ${error.response.data.message || "Unknown error."}`);
-            }
+            console.warn("Booking fetch failed", error);
         }
     };
-    
 
-    // ✅ Fetch when component loads
     useEffect(() => {
-        fetchBookings();
-
-        // ✅ Listen for updates via localStorage events
+        fetchBookings(); // initial
+    
+        let debounceTimer;
         const handleStorageChange = (event) => {
             if (event.key === "bookingUpdated") {
-                fetchBookings(); // ✅ Refresh from API
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    fetchBookings();
+                }, 300);
             }
         };
-
+    
         window.addEventListener("storage", handleStorageChange);
-        return () => window.removeEventListener("storage", handleStorageChange);
+        return () => {
+            window.removeEventListener("storage", handleStorageChange);
+            clearTimeout(debounceTimer);
+        };
     }, []);
+    
 
-    // ✅ **Force Update Booking Count in Real-Time**
     const updateBookingCount = () => {
-        fetchBookings(); // ✅ Re-fetch from API
+        fetchBookings();
         setTimeout(() => {
-            localStorage.setItem("bookingUpdated", Date.now()); // ✅ Broadcast update
-            window.dispatchEvent(new Event("storage")); // ✅ Notify other components
-        }, 100); // ✅ Add slight delay to ensure updates propagate
+            localStorage.setItem("bookingUpdated", Date.now().toString());
+        }, 100);
     };
 
     return (
@@ -59,7 +58,6 @@ export function BookProvider({ children }) {
     );
 }
 
-// ✅ Custom Hook to Use Book Context
 export function useBook() {
     return useContext(BookContext);
 }

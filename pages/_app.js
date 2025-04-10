@@ -1,3 +1,4 @@
+import '../utils/registerGlobalErrorHandlers';
 import axios from "axios";
 import '../styles/global.css';
 import { BookProvider } from "../context/BookContext";
@@ -8,6 +9,7 @@ import { Toaster } from "react-hot-toast";
 import { useEffect, useState } from "react";
 import ChatWidgetNew from "../components/ChatWidgetNew";
 import Pusher from 'pusher-js';
+
 
 import {
     getCurrentUser,
@@ -37,13 +39,17 @@ axios.interceptors.response.use(
     }
 );
 
+
+
 export default function MyApp({ Component, pageProps }) {
+  const [chatAllowed, setChatAllowed] = useState(true);
+
     const [user, setUser] = useState(null);
     const [customersToday, setCustomersToday] = useState([]);
     const [showChat, setShowChat] = useState(false);
     const [chatLoading, setChatLoading] = useState(false);
 
-
+    
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (!token) return;
@@ -83,7 +89,8 @@ export default function MyApp({ Component, pageProps }) {
       
         const pusher = new Pusher('0a411d03b9315833003e', {
           cluster: 'ap1',
-          authEndpoint: 'http://localhost:8000/broadcasting/auth', // Laravel route
+          authEndpoint: `${process.env.NEXT_PUBLIC_BACKEND_URL}/broadcasting/auth`,
+ // Laravel route
           auth: {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -119,7 +126,7 @@ export default function MyApp({ Component, pageProps }) {
             setCustomersToday(customers);
     
             // 🔔 Unread check
-            const res = await fetch("http://localhost:8000/api/customers-with-unread", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers-with-unread`, {
               headers: { Authorization: `Bearer ${token}` },
             });
     
@@ -134,7 +141,7 @@ export default function MyApp({ Component, pageProps }) {
             const admin = await getAdmin();
             setCustomersToday([admin]);
     
-            const res = await fetch("http://localhost:8000/api/admins-with-unread", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admins-with-unread`, {
               headers: { Authorization: `Bearer ${token}` },
             });
     
@@ -154,6 +161,19 @@ export default function MyApp({ Component, pageProps }) {
     
       fetchUsersAndUnread();
     }, []);
+
+    useEffect(() => {
+      const onReconnect = () => {
+        if (!chatAllowed && navigator.onLine) {
+          console.log("🔁 Retrying chat after reconnect...");
+          setChatAllowed(true);
+          setShowChat(true);
+        }
+      };
+    
+      window.addEventListener("online", onReconnect);
+      return () => window.removeEventListener("online", onReconnect);
+    }, [chatAllowed]);
     
     return (
         <BookProvider>
@@ -164,36 +184,54 @@ export default function MyApp({ Component, pageProps }) {
                         <Component {...pageProps} />
 
                         {user && customersToday.length > 0 && (
-                            <>
-                                {/* Chat toggle button */}
+                          <>
+                            {chatAllowed ? (
+                              <>
                                 {!showChat && (
-                                <div className="fixed bottom-5 right-5 z-[9999]">
+                                  <div className="fixed bottom-5 right-5 z-[9999]">
                                     <button
-                                    onClick={() => setShowChat(true)}
-                                    className="bg-pink-600 hover:bg-pink-700 text-white p-3 rounded-full shadow-lg"
+                                      onClick={() => setShowChat(true)}
+                                      className="bg-pink-600 hover:bg-pink-700 text-white p-3 rounded-full shadow-lg"
                                     >
-                                    💬
+                                      💬
                                     </button>
                                     {hasNewMessage && (
-                                    <span className="absolute -top-1 -right-1 bg-red-600 w-3 h-3 rounded-full animate-ping" />
+                                      <span className="absolute -top-1 -right-1 bg-red-600 w-3 h-3 rounded-full animate-ping" />
                                     )}
-                                </div>
+                                  </div>
                                 )}
 
-
-                                {/* Chat widget */}
                                 {showChat && (
-                              <ChatWidgetNew
-                              currentUser={user}
-                              customers={customersToday}
-                              hasNewMessage={hasNewMessage}
-                              setShowChat={setShowChat}
-                              setLoading={setChatLoading} // ✅ Pass it down
-                            />                            
+                                  <ChatWidgetNew
+                                  currentUser={user}
+                                  customers={customersToday}
+                                  hasNewMessage={hasNewMessage}
+                                  setShowChat={setShowChat}
+                                  setLoading={setChatLoading}
+                                  setChatAllowed={setChatAllowed}
+                                  chatLoading={chatLoading} // ✅ ADD THIS LINE
+                                />
+                                
                                 )}
-                            </>
+                              </>
+                            ) : (
+                              // ✅ This is the retry fallback
+                              <div className="fixed bottom-5 right-5 z-[9999] text-sm text-gray-600 flex items-center gap-2 bg-white border px-3 py-2 rounded shadow">
+                                <span>Chat unavailable</span>
+                                <button
+                                  onClick={() => {
+                                    setChatAllowed(true);
+                                    setShowChat(true); // Trigger chat retry
+                                  }}
+                                  className="text-pink-600 font-semibold hover:underline"
+                                >
+                                  Retry
+                                </button>
+                              </div>
                             )}
 
+                          </>
+                        )}
 
                 </FavoritesProvider>
             </WishlistProvider>

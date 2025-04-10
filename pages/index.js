@@ -13,15 +13,25 @@ import Head from "next/head";
 import { useWishlist } from "../context/WishlistContext";
 import { useFavorites } from "../context/FavoritesContext";
 import { toast } from "react-hot-toast";
+import AvailableGownsSection from "../components/AvailableGownsSection";
+import { parseISO, differenceInDays } from 'date-fns';
+import OutOfStockGownsSection from "../components/OutOfStockGownsSection";
+import { PartyPopper } from "lucide-react";
+import { groupProductsByDetails } from "../utils/groupProducts";
+import Footer from "../components/Footer";
+import SidebarFilter from "../components/SidebarFilter";
+
 
 export default function HomePage() {
     const [discountGroups, setDiscountGroups] = useState({});
     const [isOpen, setIsOpen] = useState(false);
-    const { setFavorites, addToFavorites, favorites } = useFavorites(); // ✅ Use Favorites Context
+    const { setFavorites, addToFavorites, toggleFavorite, favorites } = useFavorites(); // ✅ Use Favorites Context
     const [loadingButton, setLoadingButton] = useState(null); // ✅ Track loading state for buttons
+    const [showNewArrivalsOnly, setShowNewArrivalsOnly] = useState(false);
 
     const [loadingWishlist, setLoadingWishlist] = useState(null);
     const [loadingFavorites, setLoadingFavorites] = useState(null);
+    const [sortByDate, setSortByDate] = useState("newest"); // 'newest' or 'oldest'
 
 
     // State to control the calendar visibility for each gown
@@ -39,48 +49,75 @@ export default function HomePage() {
     const [selectedCategories, setSelectedCategories] = useState([]); // Tracks selected categories
 
     const [searchQuery, setSearchQuery] = useState("");
-    const { setWishlist, addToWishlist, wishlist } = useWishlist();
+    const { setWishlist, addToWishlist, wishlist, toggleWishlist } = useWishlist();
 
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 6; // Adjust the number of products per page
+    const [currentPage, setCurrentPage] = useState(1); // For Available Gowns
+    const [currentOutOfStockPage, setCurrentOutOfStockPage] = useState(1); 
 
-    // const calculatePrice = (productPrice, startDate, endDate) => {
-    //     if (!startDate || !endDate) return productPrice; // If no dates selected, return base price
-    
-    //     const start = new Date(startDate);
-    //     const end = new Date(endDate);
-    //     const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)); // Calculate days difference
-    
-    //     let addedPrice = 0;
-    //     if (diffDays >= 4 && diffDays <= 6) {
-    //         addedPrice = 980.00; // Price for 4, 5, and 6 days
-    //     } else if (diffDays === 7) {
-    //         addedPrice = 1000.00; // Price for 7 days
-    //     } else if (diffDays > 7) {
-    //         addedPrice = 1000.00 + (diffDays - 7) * 50; // Extra ₱50 per day after 7 days
-    //     }
-    
-    //     return productPrice + addedPrice; // ✅ Add product price + rental fee
-    // };    
-    
+    const sortedProducts = [...products].sort((a, b) => {
+        const createdA = a.created_at ? parseISO(a.created_at) : null;
+        const createdB = b.created_at ? parseISO(b.created_at) : null;
+      
+        const isNewA = createdA ? differenceInDays(new Date(), createdA) <= 7 : false;
+        const isNewB = createdB ? differenceInDays(new Date(), createdB) <= 7 : false;
+      
+        const hasDiscountA = a.discounted_price && a.discounted_price !== "null";
+        const hasDiscountB = b.discounted_price && b.discounted_price !== "null";
+      
+        const getPriority = (isNew, hasDiscount) => {
+          if (isNew && hasDiscount) return 1;
+          if (isNew && !hasDiscount) return 2;
+          if (!isNew && hasDiscount) return 3;
+          return 4;
+        };
+      
+        const priorityA = getPriority(isNewA, hasDiscountA);
+        const priorityB = getPriority(isNewB, hasDiscountB);
+      
+        // 🔄 Apply date sorting logic first
+        if (sortByDate === "newest" && createdA && createdB) {
+            return createdB - createdA;
+        } else if (sortByDate === "best-seller") {
+            return (b.returned_count || 0) - (a.returned_count || 0); // Highest returned first          
+        } else if (sortByDate === "best-deals") {
+            const discountA = hasDiscountA
+            ? ((Number(a.price) - Number(a.discounted_price)) / Number(a.price)) * 100
+            : 0;
+            const discountB = hasDiscountB
+            ? ((Number(b.price) - Number(b.discounted_price)) / Number(b.price)) * 100
+            : 0;
+            return discountB - discountA; // Higher discount first
+        }
+        
+      
+        // 👇 Fallback to priority-based sorting
+        if (priorityA !== priorityB) return priorityA - priorityB;
+      
+        const priceA = hasDiscountA ? Number(a.discounted_price) : Number(a.price);
+        const priceB = hasDiscountB ? Number(b.discounted_price) : Number(b.price);
+      
+        return priceB - priceA;
+      });
 
-    // // Sample available dates for each gown
-    // const availableDates = {
-    //     "Elegant Wedding Gown": ["2025-03-10", "2025-03-15", "2025-03-20"],
-    //     "Red Carpet Dress": ["2025-03-12", "2025-03-18", "2025-03-25"],
-    //     "Fairy Tale Ball Gown": ["2025-03-11", "2025-03-14", "2025-03-22"],
-    //     "Vintage Lace Dress": ["2025-03-09", "2025-03-19", "2025-03-28"],
-    //     "Simple & Chic Dress": ["2025-03-13", "2025-03-17", "2025-03-26"],
-    // };
-
-    // ✅ Fetch existing favorites when component loads
+      const bestSellerRankMap =
+      sortByDate === "best-seller"
+        ? sortedProducts
+            .filter(product => product.returned_count > 0) // ✅ Only consider products with returned bookings
+            .sort((a, b) => b.returned_count - a.returned_count)
+            .reduce((acc, product, i) => {
+              acc[product.id] = i + 1; // ✅ Assign dynamic Top N
+              return acc;
+            }, {})
+        : {};
+    
+    
     useEffect(() => {
         const fetchFavorites = async () => {
             const token = localStorage.getItem("token");
             if (!token) return; // ✅ Skip if user isn't logged in
     
             try {
-                const response = await axios.get("http://127.0.0.1:8000/api/favorites", {
+                const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/favorites`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
     
@@ -98,45 +135,38 @@ export default function HomePage() {
     useEffect(() => {
         const fetchProducts = async () => {
             try {
-                const response = await axios.get("http://127.0.0.1:8000/api/products");
-                console.log("📡 API Response (All Products):", response.data); // ✅ Debug API Response
+                const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/products`);
+                const allProducts = response.data.data;
     
-                if (response.data && Array.isArray(response.data.data)) {
-                    const allProducts = response.data.data;
-                    
-                    // ✅ Debug Hidden Products
-                    console.log("🔍 Hidden Products:", allProducts.filter(p => p.is_hidden === 1));
+                const groupedProducts = groupProductsByDetails(allProducts);
+                setProducts(groupedProducts);
     
-                    const visibleProducts = allProducts.filter(product => product.is_hidden === 0);
-                    setProducts(visibleProducts);
+                // ⬇️ Compute discount groups from grouped products
+                const newDiscountGroups = {};
+                groupedProducts.forEach((group) => {
+                    const hasDiscount = group.discounted_price && group.discounted_price !== "null";
+                    const originalPrice = parseFloat(group.price);
+                    const discountedPrice = parseFloat(group.discounted_price);
     
-                    // ✅ Ensure discounts are properly grouped
-                    const discountGroups = {};
-                    visibleProducts.forEach((product) => {
-                        if (product.discounted_price && product.price) {
-                            const discount = Math.round(((product.price - product.discounted_price) / product.price) * 100);
-                            if (discount > 0) {
-                                if (!discountGroups[discount]) {
-                                    discountGroups[discount] = [];
-                                }
-                                discountGroups[discount].push(product);
+                    if (hasDiscount && originalPrice > 0) {
+                        const discount = Math.round(((originalPrice - discountedPrice) / originalPrice) * 100);
+                        if (discount > 0) {
+                            if (!newDiscountGroups[discount]) {
+                                newDiscountGroups[discount] = [];
                             }
+                            newDiscountGroups[discount].push(group);
                         }
-                    });
-    
-                    setDiscountGroups(discountGroups);
-                } else {
-                    console.error("❌ Unexpected API Response:", response.data);
-                    setProducts([]);
-                }
+                    }
+                });
+                setDiscountGroups(newDiscountGroups);
             } catch (error) {
-                console.error("❌ API Fetch Error:", error);
-                setProducts([]);
+                console.error("Error fetching products:", error);
             }
         };
     
         fetchProducts();
     }, []);
+    
     
     
         // Array of banner background colors
@@ -156,7 +186,7 @@ export default function HomePage() {
             if (!token) return;
 
             try {
-                const response = await axios.get("http://127.0.0.1:8000/api/wishlist", {
+                const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/wishlist`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -189,7 +219,7 @@ export default function HomePage() {
     };
 
     useEffect(() => {
-        axios.get("http://127.0.0.1:8000/api/categories")
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/categories`)
             .then((response) => {
                 if (response.data.success && Array.isArray(response.data.categories)) {
                     setCategories(response.data.categories);
@@ -226,311 +256,192 @@ export default function HomePage() {
         });
     };
     
-    
-    
-    const filteredProducts = products.filter((product) =>
+    const isNewArrival = (createdAt) => {
+        try {
+          const date = parseISO(createdAt);
+          return differenceInDays(new Date(), date) <= 7;
+        } catch {
+          return false;
+        }
+      };
+      
+      const filteredProducts = sortedProducts
+        .filter((product) => {
+          if (sortByDate === "best-seller") {
+            return product.returned_count > 0;
+          }
+          if (sortByDate === "best-deals") {
+            return product.discounted_price && Number(product.discounted_price) < Number(product.price);
+          }
+          if (sortByDate === "new-arrivals") {
+            return isNewArrival(product.created_at);
+          }
+          return true;
+        })
+    .filter((product) =>
         (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
         product.price <= priceRange &&
         (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-         (product.category ? product.category.toLowerCase().includes(searchQuery.toLowerCase()) : false) || 
-         (product.description ? product.description.toLowerCase().includes(searchQuery.toLowerCase()) : false))
+        product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
     );
+
     
-    
-    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+      const itemsPerPage = 6;
+
     const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
+
+    // STEP 2: Separate into in-stock and out-of-stock groups
+    const inStockProducts = filteredProducts.filter(p => p.totalStock > 0);
+    const outOfStockProducts = filteredProducts.filter(p => p.totalStock <= 0);
+
+    // STEP 3: Paginate the filtered in-stock and out-of-stock products
+    const paginatedProducts = inStockProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const outOfStockPaginated = outOfStockProducts.slice((currentOutOfStockPage - 1) * itemsPerPage, currentOutOfStockPage * itemsPerPage);
+
+    
+    const totalPages = Math.ceil(inStockProducts.length / itemsPerPage);
+    const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / itemsPerPage);
+    
+    useEffect(() => {
+        setCurrentPage(1);
+        setCurrentOutOfStockPage(1);
+      }, [searchQuery, selectedCategories, priceRange, sortByDate, showNewArrivalsOnly]);
 
     return (
-         <AuthGuard>
-            <Head>
-                <title>Home | Gown Rental</title> {/* ✅ Dynamic Title */}
-                <meta name="description" content="Manage your profile and settings on Gown Rental." />
-                <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
-            </Head>
-        <div className="min-h-screen bg-gray-100 text-gray-800 font-poppins">
-            <Navbar /> {/* Now using the Navbar component */}
+        <AuthGuard>
+        <Head>
+            <title>Home | Gown Rental</title> {/* ✅ Dynamic Title */}
+            <meta name="description" content="Manage your profile and settings on Gown Rental." />
+            <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
+        </Head>
+    <div className="min-h-screen bg-gray-100 text-gray-800 font-poppins">
+        <Navbar /> {/* Now using the Navbar component */}
 
-            {/* Hero Section */}
-            <section className="relative bg-[url('/gown-hero.jpg')] bg-cover bg-center bg-no-repeat min-h-[60vh] flex items-center">
-                <div className="container mx-auto px-6 text-center md:text-left pt-24">
-                    <h1 className="text-4xl md:text-5xl font-bold text-pink-600 drop-shadow-lg">
-                        Find Your Dream Gown for Any Occasion
-                    </h1>
-                    <p className="mt-4 text-lg md:text-xl text-gray-800 drop-shadow-md">
-                        Elegant styles, premium fabrics, and hassle-free gown rentals.
-                    </p>
-                    <div className="mt-6 flex flex-wrap justify-center md:justify-start">
-                    <Link href="/browse">
-                    <button 
-                        onClick={() => setLoadingButton("browse")}
-                        disabled={loadingButton === "browse"}
-                        className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                            ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                        {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
-                    </button>
-                </Link>
+        {/* Hero Section */}
+        <section className="relative bg-[url('/gown-hero.jpg')] bg-cover bg-center bg-no-repeat min-h-[60vh] flex items-center">
+            <div className="container mx-auto px-6 text-center md:text-left pt-24">
+                <h1 className="text-4xl md:text-5xl font-bold text-pink-600 drop-shadow-lg">
+                    Find Your Dream Gown for Any Occasion
+                </h1>
+                <p className="mt-4 text-lg md:text-xl text-gray-800 drop-shadow-md">
+                    Elegant styles, premium fabrics, and hassle-free gown rentals.
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center md:justify-start">
+                <Link href="/browse">
+                <button 
+                    onClick={() => setLoadingButton("browse")}
+                    disabled={loadingButton === "browse"}
+                    className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                        ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                    {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
+                </button>
+            </Link>
 
-                <Link href="/about">
-                    <button 
-                        onClick={() => setLoadingButton("learn")}
-                        disabled={loadingButton === "learn"}
-                        className={`ml-4 border-2 border-white text-gray hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                            ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                        {loadingButton === "learn" ? "Loading..." : "Learn More"}
-                    </button>
-                </Link>
+            <Link href="/about">
+                <button 
+                    onClick={() => setLoadingButton("learn")}
+                    disabled={loadingButton === "learn"}
+                    className={`ml-4 border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                        ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                    {loadingButton === "learn" ? "Loading..." : "Learn More"}
+                </button>
+            </Link>
 
 
-                    </div>
                 </div>
-            </section>
-            {/* Main Content - Sidebar & Products */}
-            <div className="container mx-auto px-4 md:px-6 mt-10 flex flex-col md:flex-row gap-8">
-                {/* Sidebar - Filters */}
-                <aside className="w-full md:w-1/4 bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold text-gray-800">Filters</h2>
-
-                    {/* Category Filters */}
-                    <ul className="mt-2 space-y-2 text-gray-600">
-                        {categories.length > 0 ? (
-                            categories.map((category) => (
-                                <li key={category}>
-                                    <input
-                                        type="checkbox"
-                                        className="mr-2"
-                                        checked={selectedCategories.includes(category)}
-                                        onChange={() => handleCategoryChange(category)}
-                                    />
-                                    {category}
-                                </li>
-                            ))
-                        ) : (
-                            <p>Loading categories...</p>
-                        )}
-                    </ul>
-
-                    {/* Price Range */}
-                    <div className="mt-6">
-                        <h3 className="text-lg font-medium text-pink-600">Price Range</h3>
-                        <input 
-                            type="range"
-                            min="0"
-                            max="50000"
-                            value={priceRange}
-                            onChange={(e) => setPriceRange(Number(e.target.value))}
-                            className="w-full mt-2 appearance-none bg-pink-300 h-2 rounded-lg outline-none cursor-pointer
-                            [&::-webkit-slider-thumb]:appearance-none
-                            [&::-webkit-slider-thumb]:w-5
-                            [&::-webkit-slider-thumb]:h-5
-                            [&::-webkit-slider-thumb]:bg-pink-600
-                            [&::-webkit-slider-thumb]:rounded-full
-                            [&::-webkit-slider-thumb]:cursor-pointer"
-                        />
-                        <p className="text-pink-600 text-sm">Up to ₱{priceRange}</p>
-                    </div>
-
-                    {/* ✅ Dynamic Promotional Banners */}
-                    <div className="mt-8">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">🔥 Promotions</h3>
-
-                        {Object.keys(discountGroups).length > 0 ? (
-                            Object.keys(discountGroups).map((discount, idx) => (
-                                <div 
-                                    key={idx} 
-                                    className={`p-4 rounded-lg shadow-md my-3 text-white text-center ${bannerColors[idx % bannerColors.length]}`}
-                                >
-                                    🎉 {discount}% OFF on:
-                                    <ul className="mt-2">
-                                        {discountGroups[discount].map((product, index) => (
-                                            <li
-                                                key={product.id}
-                                                className="inline-block px-3 py-1 font-semibold text-white bg-gray-900 rounded-lg mx-1"
-                                            >
-                                                {product.name}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-gray-500 text-sm">No promotions available.</p>
-                        )}
-                    </div>
-                </aside>
+            </div>
+        </section>
+        {/* Main Content - Sidebar & Products */}
+        <div className="container mx-auto px-4 md:px-6 mt-10 flex flex-col md:flex-row items-start gap-8">
+            {/* Sidebar - Filters */}
+             <SidebarFilter
+                            categories={categories}
+                            selectedCategories={selectedCategories}
+                            handleCategoryChange={handleCategoryChange}
+                            priceRange={priceRange}
+                            setPriceRange={setPriceRange}
+                            sortByDate={sortByDate}
+                            setSortByDate={setSortByDate}
+                            discountGroups={discountGroups}
+                            bannerColors={bannerColors}
+                            showNewArrivalsOnly={showNewArrivalsOnly}
+                            setShowNewArrivalsOnly={setShowNewArrivalsOnly}
+                            />
 
 
                     {/* Product Section */}
                     <div className="w-full md:w-3/4">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-semibold text-gray-800">Available Gowns</h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                    <h2 className="text-2xl font-semibold text-gray-800">Available Gowns</h2>
+
+                    <div className="relative flex items-center w-full sm:w-80">
                         <input
-                            type="text"
-                            placeholder="Search gowns..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:ring focus:ring-pink-300"
+                        type="text"
+                        placeholder="Search Gowns..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-5 pr-12 py-2 rounded-full border border-pink-200 focus:ring-2 focus:ring-pink-300 text-sm shadow-sm"
                         />
+                        <button
+                        className="absolute right-1 top-1 bottom-1 bg-pink-700 hover:bg-pink-800 text-white rounded-full p-2 transition"
+                        >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M21 21l-4.35-4.35M16 10a6 6 0 11-12 0 6 6 0 0112 0z"
+                            />
+                        </svg>
+                        </button>
+                    </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                                {paginatedProducts.length > 0 ? (
-                                    paginatedProducts.map((product) => (
-                                    <div key={product.id} className="bg-white p-4 md:p-6 rounded-lg shadow-md hover:shadow-lg transition">
-                                        
-                                        {/* Product Image (Click redirects to product page) */}
-                                        <Link href={`/products/${product.id}`} className="block">
-                                        <div className="relative w-full h-48 md:h-64 flex justify-center items-center">
-                                        {product.image ? (
-                                        <Image 
-                                         src={`http://127.0.0.1:8000/storage/${product.image}`} 
-                                         alt={product.name}
-                                         width={200}
-                                         height={400}
-                                         className="rounded-lg object-cover"
-                                       />
-                                            ) : (
-                                            <p>No Image Available</p>
-                                            )}
 
-                                        </div>
-                                        </Link>
-
-                                        {/* Product Name (Click redirects to product page) */}
-                                        <Link href={`/products/${product.id}`} className="block">
-                                        <h3 className="text-lg md:text-xl font-semibold text-gray-700 mt-3">{product.name}</h3>
-                                        </Link>
-
-                                        <p className="text-gray-500 text-sm">{product.category || "Uncategorized"}</p>
-                                        <div className="mt-2 flex items-center space-x-2">
-                                            {product.discounted_price && product.discounted_price < product.price ? (
-                                                <>
-                                                    <p className="text-red-500 text-lg font-bold line-through">
-                                                        ₱{Number(product.price).toLocaleString()}
-                                                    </p>
-                                                    <p className="text-green-600 text-sm font-semibold">
-                                                        ({Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF)
-                                                    </p>
-                                                    <p className="text-pink-600 text-xl font-bold">
-                                                        ₱{Number(product.discounted_price).toLocaleString()}
-                                                    </p>
-                                                </>
-                                            ) : (
-                                                <p className="text-pink-600 text-lg font-bold">₱{Number(product.price).toLocaleString()}</p>
-                                            )}
-                                        </div>
-
-                                        {/* Book Button (Click redirects to product page) */}
-                                        <button 
-                                            onClick={() => {
-                                                toast.success("Redirecting to product page...", {
-                                                    duration: 3000,
-                                                    position: "top-right",
-                                                });
-                                                setLoadingButton(`book-${product.id}`);
-                                                setTimeout(() => {
-                                                    window.location.href = `/products/${product.id}`;
-                                                }, 1000); // Short delay before redirect
-                                            }}
-                                            disabled={loadingButton === `book-${product.id}`}
-                                            className={`w-full mt-3 md:mt-4 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-2 px-4 md:px-6 rounded-lg shadow-md transition
-                                                ${loadingButton === `book-${product.id}` ? "opacity-50 cursor-not-allowed" : ""}`}
-                                        >
-                                            {loadingButton === `book-${product.id}` ? "Loading..." : "Book"}
-                                        </button>
+                    <AvailableGownsSection
+                    products={paginatedProducts}
+                    wishlist={wishlist}
+                    favorites={favorites}
+                    loadingWishlist={loadingWishlist}
+                    loadingFavorites={loadingFavorites}
+                    setLoadingWishlist={setLoadingWishlist}
+                    addToFavorites={toggleFavorite}
+                    addToWishlist={toggleWishlist}
+                    setLoadingFavorites={setLoadingFavorites}
+                    loadingButton={loadingButton}
+                    setLoadingButton={setLoadingButton}
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    setCurrentPage={setCurrentPage}
+                    sortByDate={sortByDate}
+                    bestSellerRankMap={bestSellerRankMap}
+                    />
 
 
-                                        {/* Wishlist & Favorite Icons (No Redirect) */}
-                                        <div className="flex justify-center space-x-4 mt-3 md:mt-4">
-                                        
-                                            {/* Wishlist Icon */}
-                                            <button 
-                                                onClick={async () => {
-                                                    setLoadingWishlist(product.id); // Start loading
-                                                    await addToWishlist(product.id);
-                                                    setLoadingWishlist(null); // Stop loading
-                                                }} 
-                                                className="relative group"
-                                                disabled={loadingWishlist === product.id}
-                                            >
-                                                {loadingWishlist === product.id ? (
-                                                    <FaSpinner className="text-pink-600 text-2xl animate-spin" /> // **Proper loading icon**
-                                                ) : (
-                                                    <>
-                                                        <FaHeart 
-                                                            className={`${wishlist.includes(product.id) ? "text-red-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                                        />
-                                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
-                                                            {wishlist.includes(product.id) ? "Added to Wishlist" : "Add to Wishlist"}
-                                                            <div className="tooltip-arrow" data-popper-arrow></div>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </button>
+                    <OutOfStockGownsSection
+                    products={outOfStockPaginated}
+                    currentPage={currentOutOfStockPage}
+                    totalPages={outOfStockTotalPages}
+                    setCurrentPage={setCurrentOutOfStockPage}
+                    sortByDate={sortByDate} 
+                    />
 
 
 
-                                       {/* Favorite Icon */} 
-                                       <button 
-                                            onClick={async () => {
-                                                setLoadingFavorites(product.id); // Start loading
-                                                await addToFavorites(product.id);
-                                                setLoadingFavorites(null); // Stop loading
-                                            }} 
-                                            className="relative group"
-                                            disabled={loadingFavorites === product.id}
-                                        >
-                                            {loadingFavorites === product.id ? (
-                                                <FaSpinner className="text-yellow-500 text-2xl animate-spin" /> // **Proper loading icon**
-                                            ) : (
-                                                <>
-                                                    <FaStar 
-                                                        className={`${favorites.includes(product.id) ? "text-yellow-500" : "text-gray-500"} hover:text-pink-700 text-2xl cursor-pointer transition`} 
-                                                    />
-                                                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-medium px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition duration-300">
-                                                        {favorites.includes(product.id) ? "Added to Favorites" : "Add to Favorites"}
-                                                        <div className="tooltip-arrow" data-popper-arrow></div>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </button>
-                                        
-                                        </div>
-                                    </div>
-                                    ))
-                                ) : (
-                                    <p className="text-center text-gray-600">No products available.</p>
-                                )}
-                                </div>
-
-
-                        {/* Pagination Controls */}
-                        <div className="flex justify-center mt-8 space-x-4">
-                            <button
-                                className={`px-4 py-2 rounded-lg font-semibold ${currentPage === 1 ? "bg-gray-300 cursor-not-allowed" : "bg-pink-600 text-white hover:bg-pink-700"}`}
-                                onClick={() => setCurrentPage(currentPage - 1)}
-                                disabled={currentPage === 1}
-                            >
-                                Previous
-                            </button>
-                            <span className="text-lg font-semibold text-pink-600">{currentPage} / {totalPages}</span>
-                            <button
-                                className={`px-4 py-2 rounded-lg font-semibold ${currentPage === totalPages ? "bg-gray-300 cursor-not-allowed" : "bg-pink-600 text-white hover:bg-pink-700"}`}
-                                onClick={() => setCurrentPage(currentPage + 1)}
-                                disabled={currentPage === totalPages}
-                            >
-                                Next
-                            </button>
-                        </div>
-                    </div>
+                </div>
                 </div>
 
                 {/* Footer */}
-                <footer className="bg-pink-600 text-white text-center py-6 mt-10">
-                    <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-                </footer>
+                 <Footer />
             </div>
         </AuthGuard>
     );

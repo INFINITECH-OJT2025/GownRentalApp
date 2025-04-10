@@ -11,6 +11,8 @@ import Navbar from "../components/Navbar";
 import Head from "next/head";
 import { useFavorites } from "../context/FavoritesContext"; // ✅ Import Favorites Context
 import { toast } from "react-hot-toast";
+import Footer from "../components/Footer";
+
 
 export default function FavoritesPage() {
     const { favorites, setFavorites } = useFavorites(); // ✅ Correct use of context hook
@@ -31,7 +33,8 @@ export default function FavoritesPage() {
             return;
         }
 
-        axios.get("http://127.0.0.1:8000/api/favorites", {
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/favorites`
+, {
             headers: { Authorization: `Bearer ${token}` }
         })
         .then((response) => {
@@ -77,7 +80,8 @@ export default function FavoritesPage() {
         setDeletingItemId(productId); // ✅ Start loading state for this item
     
         try {
-            await axios.delete(`http://127.0.0.1:8000/api/favorites/${productId}`, {
+            await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/favorites/${productId}`
+, {
                 headers: { Authorization: `Bearer ${token}` }
             });
     
@@ -111,7 +115,8 @@ export default function FavoritesPage() {
         try {
             await Promise.all(
                 selectedItems.map(productId =>
-                    axios.delete(`http://127.0.0.1:8000/api/favorites/${productId}`, {
+                    axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/favorites/${productId}`
+, {
                         headers: { Authorization: `Bearer ${token}` }
                     })
                 )
@@ -145,7 +150,7 @@ export default function FavoritesPage() {
         if (!token) return  toast.error("You must be logged in to clear your favorites.", { position: "top-right" });
     
         try {
-            await axios.delete("http://127.0.0.1:8000/api/favorites/clear", {
+            await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/favorites/clear`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
     
@@ -199,7 +204,7 @@ export default function FavoritesPage() {
                     <Image
                         src={row.product.image.startsWith("http")
                             ? row.product.image
-                            : `http://127.0.0.1:8000/storage/${row.product.image}`}
+                            : `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/${row.product.image}`}
                         alt={row.product.name}
                         width={50}
                         height={50}
@@ -211,7 +216,7 @@ export default function FavoritesPage() {
         },
         {
             name: "Price",
-            selector: row => `₱${(parseFloat(row.product.price) || 0).toFixed(2)}`,
+            selector: row => `₱${(parseFloat(row.product.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             sortable: true,
             center: true
         },
@@ -249,7 +254,7 @@ export default function FavoritesPage() {
             <div className="flex-grow container mx-auto px-6 py-20">
                 <h1 className="text-4xl font-bold text-gray-800">My Favorites</h1>
                 <p className="text-gray-600 mt-2 mb-4">
-                    There are {favorites?.length || 0} products in this favorites.
+                    There are {favorites?.length || 0} product/s in this favorites.
                 </p>
 
                 {/* Search Bar */}
@@ -319,9 +324,7 @@ export default function FavoritesPage() {
             </div>
 
             {/* Footer now sticks to the bottom */}
-            <footer className="bg-pink-600 text-white text-center py-6 mt-auto">
-                <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-            </footer>
+            <Footer />
         </div>
         
         </AuthGuard>

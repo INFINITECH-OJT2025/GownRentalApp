@@ -1,7 +1,7 @@
 // frontend/utils/api.js
 
 export async function getCurrentUser(token) {
-    const res = await fetch("http://localhost:8000/api/user", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user`, {
         headers: {
             Authorization: `Bearer ${token}`,
         },
@@ -19,12 +19,18 @@ export async function getCurrentUser(token) {
     };
 }
 
-// Get first admin (for customers to chat with)
 export async function getAdmin() {
-    const res = await fetch("http://localhost:8000/api/admins");
-    const admins = await res.json();
-    return admins[0];
-}
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admins`);
+      if (!res.ok) throw new Error("Admin fetch failed");
+      const admins = await res.json();
+      return admins[0];
+    } catch (err) {
+      console.error("❌ getAdmin failed:", err);
+      return null;
+    }
+  }
+  
 
 // ✅ NEW: Get current customer (if logged-in user is a customer)
 export async function getCurrentCustomer(token) {
@@ -37,7 +43,7 @@ export async function getCurrentCustomer(token) {
 }
   
   export async function getCustomersLoggedInToday(token) {
-    const res = await fetch("http://localhost:8000/api/customers-today", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers-today`, {
         headers: {
             Authorization: `Bearer ${token}`,
         },

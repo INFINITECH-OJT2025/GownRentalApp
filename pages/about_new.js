@@ -1,22 +1,20 @@
 "use client";
 
 import Head from "next/head";
-import AuthGuard from "../components/AuthGuard";
+import GuestNavbar from "../components/GuestNavbar"; // adjust path if needed
+import FooterNew from "../components/Footer_new";
 import Link from "next/link";
-import Navbar from "../components/Navbar"; 
-import Footer from "../components/Footer";
 
-export default function AboutPage() {
+export default function AboutNew() {
     return (
-        <AuthGuard>
+        <>
              <Head>
                 <title>About Us | Gown Rental</title> {/* ✅ Dynamic Title */}
                 <meta name="description" content="Manage your profile and settings on Gown Rental." />
                 <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
             </Head>
         <div className="min-h-screen bg-pink-50 text-gray-800 font-poppins">
-            <Navbar /> {/* Import the Navbar component */}
-
+     <GuestNavbar />
                 {/* Hero Section - Soft Feminine Banner */}
                 <section className="relative bg-gradient-to-r from-pink-300 via-pink-200 to-pink-100 text-center py-32 flex flex-col items-center">
                     <h1 className="text-5xl font-bold text-white drop-shadow-lg mt-6">
@@ -57,16 +55,15 @@ export default function AboutPage() {
             <section className="text-center my-16 px-6">
                 <h2 className="text-3xl font-semibold text-pink-600">Ready to Find Your Dream Gown?</h2>
                 <p className="text-gray-700 mt-2">Explore our collection and rent the perfect gown for your occasion.</p>
-                <Link href="/browse">
+                <Link href="/rent_now">
                     <button className="mt-6 bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition">
                         Browse Gowns
                     </button>
                 </Link>
             </section>
-
             {/* Footer */}
-            <Footer />
+            <FooterNew />
         </div>
-        </AuthGuard>
+        </>
     );
 }

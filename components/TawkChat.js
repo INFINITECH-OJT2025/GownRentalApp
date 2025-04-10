@@ -8,7 +8,7 @@ export default function TawkChat() {
         const token = localStorage.getItem("token");
         if (!token) return; // No token, don't load chat
 
-        axios.get("http://127.0.0.1:8000/api/user", {
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/user`, {
             headers: { Authorization: `Bearer ${token}` },
         })
         .then((res) => {

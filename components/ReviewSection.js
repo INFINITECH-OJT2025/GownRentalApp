@@ -1,9 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { Star } from "lucide-react";
+import toast from "react-hot-toast";
+import { useRouter } from "next/router";
+
+
 
 export default function ReviewSection({ productId }) {
+  
   const [reviews, setReviews] = useState([]);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -20,6 +25,63 @@ export default function ReviewSection({ productId }) {
   const currentReviews = reviews.slice(indexOfFirstReview, indexOfLastReview);
 
   const totalPages = Math.ceil(reviews.length / reviewsPerPage);
+  const [submitting, setSubmitting] = useState(false);
+  const [editReviewId, setEditReviewId] = useState(null);
+const [editRating, setEditRating] = useState(5);
+const [editComment, setEditComment] = useState("");
+
+const toggleEditMode = (id) => {
+  const review = reviews.find((r) => r.id === id);
+  if (review) {
+    setEditReviewId(id);
+    setEditRating(review.rating);
+    setEditComment(review.comment);
+  }
+};
+
+
+  const [user, setUser] = useState(null);
+
+useEffect(() => {
+  const fetchUser = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/user`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      setUser(res.data.user); // ✅ Safe and correct
+      
+    } catch (err) {
+      console.error("Failed to fetch user:", err);
+    }
+  };
+
+  fetchUser();
+}, []);
+
+
+  // 👇 At the top, inside the component
+const [expandedReviews, setExpandedReviews] = useState({});
+const [expandedReplies, setExpandedReplies] = useState({});
+
+const toggleReviewExpand = (id) => {
+  setExpandedReviews((prev) => ({ ...prev, [id]: !prev[id] }));
+};
+
+const toggleReplyExpand = (id) => {
+  setExpandedReplies((prev) => ({ ...prev, [id]: !prev[id] }));
+};
+
+const getTruncatedText = (text, limit = 10) => {
+  if (!text) return ""; // ✅ Prevent error when null or undefined
+  const words = text.split(" ");
+  return words.length > limit ? words.slice(0, limit).join(" ") + "..." : text;
+};
 
   const nextPage = () => {
       if (currentPage < totalPages) setCurrentPage(currentPage + 1);
@@ -29,6 +91,15 @@ export default function ReviewSection({ productId }) {
       if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
+  const router = useRouter();
+
+useEffect(() => {
+  const bookingRefFromQuery = router.query.booking_ref;
+  if (bookingRefFromQuery) {
+    setSelectedBooking(bookingRefFromQuery);
+  }
+}, [router.query.booking_ref]);
+
 
   // ✅ Fetch Reviews
   
@@ -37,7 +108,7 @@ export default function ReviewSection({ productId }) {
 
     const fetchReviews = async () => {
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/reviews/${productId}`, {
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/reviews/${productId}`, {
           headers: { Accept: "application/json" },
         });
 
@@ -71,7 +142,7 @@ export default function ReviewSection({ productId }) {
                 return;
             }
 
-            const apiUrl = `http://127.0.0.1:8000/api/bookings/check-review-eligibility/${productId}`;
+            const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/bookings/check-review-eligibility/${productId}`;
             console.log("Checking review eligibility with API:", apiUrl);
 
             const response = await axios.get(apiUrl, {
@@ -79,8 +150,10 @@ export default function ReviewSection({ productId }) {
             });
 
             if (response.status === 200 && response.data.success) {
-                setUnreviewedBookings(response.data.unreviewed_bookings || []);
-            } else {
+              const unreviewed = response.data.unreviewed_bookings || [];
+              setUnreviewedBookings(unreviewed);
+            }
+             else {
                 console.warn("⚠ Review eligibility check failed:", response.data.message);
                 setUnreviewedBookings([]);
             }
@@ -104,77 +177,151 @@ export default function ReviewSection({ productId }) {
 
 
   
-  const submitReview = async () => {
-    if (!selectedBooking) {
-      alert("⚠ Select a booking to review.");
-      return;
+const submitReview = async () => {
+  if (!selectedBooking) {
+    toast.error("Please select a booking to review.", {
+      duration: 3000,
+      position: "top-right",
+    });
+    return;
+  }
+
+  setSubmitting(true); // ⏳ Start loading
+
+  try {
+    const token = localStorage.getItem("token");
+
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/reviews`,
+      { product_id: productId, booking_reference: selectedBooking, rating, comment },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        withCredentials: true,
+      }
+    );
+
+    if (response.data.success) {
+      if (response.data.already_reviewed) {
+        toast.error(response.data.message, {
+          duration: 3000,
+          position: "top-right",
+        });
+      } else {
+        setReviews([...reviews, response.data.review]);
+        toast.success("Review submitted successfully!", {
+          duration: 3000,
+          position: "top-right",
+        });
+      }
+
+      setUnreviewedBookings(unreviewedBookings.filter((ref) => ref !== selectedBooking));
+      setSelectedBooking("");
+      setComment("");
+      setRating(5); // Reset rating
     }
+  } catch (error) {
+    console.error("Error posting review:", error);
+    toast.error(error.response?.data?.message || "❌ An error occurred.", {
+      duration: 3000,
+      position: "top-right",
+    });
+  } finally {
+    setSubmitting(false); // ✅ Stop loading
+  }
+};
 
-    try {
-      const token = localStorage.getItem("token");
+const handleReviewUpdate = async (reviewId) => {
+  const token = localStorage.getItem("token");
+  try {
+    const res = await axios.put(
+      `${process.env.NEXT_PUBLIC_API_URL}/reviews/${reviewId}`,
+      {
+        rating: editRating,
+        comment: editComment,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-      const response = await axios.post(
-        "http://127.0.0.1:8000/api/reviews",
-        { product_id: productId, booking_reference: selectedBooking, rating, comment },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          withCredentials: true,
-        }
+    if (res.data.success) {
+      toast.success("Review updated!");
+      const updated = res.data.review;
+
+      // ✅ Update the local review
+      setReviews((prev) =>
+        prev.map((r) => (r.id === reviewId ? updated : r))
       );
 
-      if (response.data.success) {
-        if (response.data.already_reviewed) {
-          alert(response.data.message);
-        } else {
-          setReviews([...reviews, response.data.review]);
-          alert("✅ Review submitted successfully!");
-        }
-
-        setUnreviewedBookings(unreviewedBookings.filter((ref) => ref !== selectedBooking));
-        setSelectedBooking("");
-        setComment("");
-        setRating(5); // Reset rating after submitting
-      }
-    } catch (error) {
-      console.error("Error posting review:", error);
-      alert(error.response?.data?.message || "❌ An error occurred.");
+      // ✅ Exit edit mode
+      setEditReviewId(null);
     }
-  };
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Failed to update review");
+  }
+};
+
   
   return (
-    <div className="p-6 bg-white shadow-md rounded-lg">
+    <div className="w-full flex justify-center">
+      <div className="p-6 bg-white shadow-md rounded-lg w-full max-w-2xl">
+    
       <h3 className="text-lg font-semibold mb-4">Write a Review</h3>
 
       {unreviewedBookings.length === 0 ? (
-        <p className="text-red-500">⚠ No bookings available for review.</p>
+        <div className="text-center text-gray-600">
+        <p className="text-pink-500 font-semibold mb-2">
+          ✨ No reviews to submit for this product. ✨
+        </p>
+
+          <p>Check out what others have said below.</p>
+        </div>
       ) : (
         <>
-          <select
-            className="border p-2 rounded w-full"
-            value={selectedBooking}
-            onChange={(e) => setSelectedBooking(e.target.value)}
-          >
-            <option value="">Select a Booking Reference</option>
-            {unreviewedBookings.map((ref) => (
-              <option key={ref} value={ref}>Booking {ref}</option>
-            ))}
-          </select>
-
+         {router.query.booking_ref ? (
+        <>
+          <input
+            type="text"
+            value={`Booking Reference Number: ${router.query.booking_ref}`}
+            disabled
+            className="border p-2 rounded w-full bg-white text-pink-800"
+          />
+        </>
+      ) : (
+        <select
+          className="border p-2 rounded w-full bg-white"
+          value={selectedBooking}
+          onChange={(e) => setSelectedBooking(e.target.value)}
+        >
+          <option value="">Select a Booking Reference</option>
+          {unreviewedBookings.map((ref) => (
+            <option key={ref} value={ref}>
+              Booking {ref}
+            </option>
+          ))}
+        </select>
+      )}
 
             {/* ⭐ Star Rating Selector (Added Here) */}
-          <div className="flex mt-4">
-            {[1, 2, 3, 4, 5].map((num) => (
-              <Star
-                key={num}
-                size={30}
-                className={`cursor-pointer ${num <= rating ? "text-yellow-400" : "text-gray-300"}`}
-                onClick={() => setRating(num)}
-              />
-            ))}
+            <div className="mt-6">
+            <h4 className="text-md font-semibold text-gray-700 mb-2">Rate Our Product:</h4>
+            <div className="flex">
+              {[1, 2, 3, 4, 5].map((num) => (
+                <Star
+                  key={num}
+                  size={30}
+                  className={`cursor-pointer ${num <= rating ? "text-yellow-400" : "text-gray-300"}`}
+                  onClick={() => setRating(num)}
+                />
+              ))}
+            </div>
           </div>
+
 
           <textarea
             className="border rounded p-2 w-full mt-2"
@@ -184,11 +331,41 @@ export default function ReviewSection({ productId }) {
           ></textarea>
 
           <button
-            className="bg-pink-500 text-white px-4 py-2 rounded mt-2"
+            className={`bg-pink-500 text-white px-4 py-2 rounded mt-2 flex items-center justify-center gap-2 transition ${
+              submitting ? "bg-gray-400 cursor-not-allowed" : "hover:bg-pink-600"
+            }`}
             onClick={submitReview}
+            disabled={submitting}
           >
-            Submit Review
+            {submitting ? (
+              <>
+                <svg
+                  className="animate-spin h-4 w-4 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8H4z"
+                  />
+                </svg>
+                Saving...
+              </>
+            ) : (
+              "Submit Review"
+            )}
           </button>
+
         </>
       )}
 
@@ -213,15 +390,88 @@ export default function ReviewSection({ productId }) {
                 ))}
               </div>
           
-              <p className="text-gray-600">{review.comment}</p>
-          
-              {review.admin_reply && (
-                <div className="mt-2 p-3 bg-gray-100 rounded">
-                  <p className="text-sm text-gray-800">
-                    <strong className="text-blue-500">Admin Reply:</strong> {review.admin_reply}
-                  </p>
-                </div>
+              <p className="text-gray-600">
+            {expandedReviews[review.id]
+              ? review.comment
+              : getTruncatedText(review.comment)}
+          </p>
+          {review.comment && review.comment.split(" ").length > 10 && (
+            <button
+              onClick={() => toggleReviewExpand(review.id)}
+              className="text-sm text-pink-500 hover:underline"
+            >
+              {expandedReviews[review.id] ? "See less" : "See more"}
+            </button>
+          )}
+
+        {user && review.user_id === user.id && review.edit_count < 2 && (
+        <div className="mt-1">
+        <button
+          onClick={() => toggleEditMode(review.id)}
+          className="text-blue-500 text-sm hover:underline"
+        >
+          Edit Review ({2 - review.edit_count} left)
+        </button>
+      </div>
+   
+            
+          )}
+
+          {editReviewId === review.id && (
+            <div className="mt-2">
+              <h4 className="text-sm font-semibold text-gray-700 mb-1">Edit your review</h4>
+              <div className="flex mb-2">
+                {[1, 2, 3, 4, 5].map((num) => (
+                  <Star
+                    key={num}
+                    size={24}
+                    className={`cursor-pointer ${num <= editRating ? "text-yellow-400" : "text-gray-300"}`}
+                    onClick={() => setEditRating(num)}
+                  />
+                ))}
+              </div>
+              <textarea
+                className="border p-2 w-full rounded"
+                value={editComment}
+                onChange={(e) => setEditComment(e.target.value)}
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => handleReviewUpdate(review.id)}
+                  className="bg-yellow-500 text-white px-4 py-1 rounded"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditReviewId(null)}
+                  className="text-gray-500 text-sm underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+
+          {review.admin_reply && (
+            <div className="mt-2 p-3 bg-gray-100 rounded">
+              <p className="text-sm text-gray-800">
+                <strong className="text-blue-500">Admin Reply:</strong>{" "}
+                {expandedReplies[review.id]
+                  ? review.admin_reply
+                  : getTruncatedText(review.admin_reply)}
+              </p>
+              {review.admin_reply && review.admin_reply.split(" ").length > 10 && (
+                <button
+                  onClick={() => toggleReplyExpand(review.id)}
+                  className="text-sm text-blue-500 hover:underline mt-1"
+                >
+                  {expandedReplies[review.id] ? "See less" : "See more"}
+                </button>
               )}
+            </div>
+          )}
+
             </div>
           ))}
 
@@ -255,6 +505,7 @@ export default function ReviewSection({ productId }) {
         </>
       )}
 
+</div>
     </div>
   );
 }

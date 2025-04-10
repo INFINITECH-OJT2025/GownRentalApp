@@ -11,6 +11,7 @@ import Navbar from "../components/Navbar";
 import Head from "next/head";
 import { useWishlist } from "../context/WishlistContext";
 import { toast } from "react-hot-toast";
+import Footer from "../components/Footer";
 
 export default function WishlistPage() {
     const { wishlist, setWishlist } = useWishlist(); // ✅ Correct variable names
@@ -34,8 +35,7 @@ export default function WishlistPage() {
             return;
         }
     
-        axios.get("http://127.0.0.1:8000/api/wishlist", {
-            headers: { Authorization: `Bearer ${token}` }
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/wishlist`, {            headers: { Authorization: `Bearer ${token}` }
         })
         .then((response) => {
             setWishlist(response.data.data || []);
@@ -84,7 +84,7 @@ export default function WishlistPage() {
         try {
             await Promise.all(
                 selectedItems.map(productId =>
-                    axios.delete(`http://127.0.0.1:8000/api/wishlist/${productId}`, {
+                    axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/wishlist/${productId}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     })
                 )
@@ -115,7 +115,7 @@ export default function WishlistPage() {
         setDeletingItemId(productId); // ✅ Start loading state for this item
     
         try {
-            await axios.delete(`http://127.0.0.1:8000/api/wishlist/${productId}`, {
+            await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/wishlist/${productId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
     
@@ -151,7 +151,7 @@ export default function WishlistPage() {
         }
 
         try {
-            const response = await axios.delete("http://127.0.0.1:8000/api/wishlist/clear", {
+            const response = await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/wishlist/clear`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
     
@@ -209,7 +209,7 @@ export default function WishlistPage() {
                     <Image
                         src={row.product.image.startsWith("http")
                             ? row.product.image
-                            : `http://127.0.0.1:8000/storage/${row.product.image}`}
+                            : `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/${row.product.image}`}
                         alt={row.product.name}
                         width={50}
                         height={50}
@@ -221,7 +221,7 @@ export default function WishlistPage() {
         },
         {
             name: "Price",
-            selector: row => `₱${(parseFloat(row.product.price) || 0).toFixed(2)}`,
+            selector: row => `₱${(parseFloat(row.product.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             sortable: true,
             center: true
         },
@@ -260,7 +260,7 @@ export default function WishlistPage() {
             <div className="flex-grow container mx-auto px-6 py-20">
                 <h1 className="text-4xl font-bold text-gray-800">My Wishlist</h1>
                 <p className="text-gray-600 mt-2 mb-4">
-                    There are {wishlist?.length || 0} products in this wishlist.
+                    There are {wishlist?.length || 0} product/s in this wishlist.
                 </p>
 
                 {/* 🔎 Search Bar */}
@@ -329,9 +329,7 @@ export default function WishlistPage() {
                 </div>
             </div>
 
-            <footer className="bg-pink-600 text-white text-center py-6 mt-auto">
-                <p>&copy; {new Date().getFullYear()} Gown Rental System. All Rights Reserved.</p>
-            </footer>
+            <Footer />
         </div>
         </AuthGuard>
     );
