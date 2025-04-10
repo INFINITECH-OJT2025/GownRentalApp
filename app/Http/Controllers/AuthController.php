@@ -13,6 +13,13 @@ class AuthController extends Controller
     /**
      * ✅ Register a new user and return access token.
      */
+
+     public function checkContact(Request $request)
+     {
+         $exists = User::where('contact_number', $request->contact_number)->exists();
+         return response()->json(['exists' => $exists]);
+     }
+     
     public function register(Request $request)
     {
         \Log::info('📩 Registration Attempt:', $request->all());
@@ -20,6 +27,7 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'contact_number' => 'required|regex:/^09\d{9}$/|unique:users,contact_number',
             'password' => 'required|string|min:6|confirmed',
         ]);
     
@@ -28,6 +36,7 @@ class AuthController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
+                'contact_number' => $request->contact_number,
             ]);
     
             // ✅ Debugging: Check if user exists
@@ -65,34 +74,37 @@ class AuthController extends Controller
      * ✅ Login and return access token.
      */
     public function login(Request $request)
-{
-    $credentials = $request->validate([
-        'email' => 'required|email',
-        'password' => 'required'
-    ]);
+    {
+        $credentials = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required'
+        ]);
 
-    if (!Auth::attempt($credentials)) {
-        return response()->json(['message' => 'Invalid email or password.'], 401);
+        if (!Auth::attempt($credentials)) {
+            return response()->json(['message' => 'Invalid email or password.'], 401);
+        }
+
+        $user = Auth::user();
+
+        // ✅ Update user login status
+        $user->is_active = 1;
+        $user->touch(); // updates updated_at
+        $user->save();
+
+        $token = $user->createToken('authToken')->accessToken;
+
+        return response()->json([
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
+                'is_active' => $user->is_active
+            ]
+        ]);
     }
-
-    $user = Auth::user();
-
-    // ✅ Update `updated_at` to mark user as "active today"
-    $user->touch();
-
-    $token = $user->createToken('authToken')->accessToken;
-
-    return response()->json([
-        'token' => $token,
-        'user' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role,
-            'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null
-        ]
-    ]);
-}
 
     /**
      * ✅ Logout and revoke user's token.
@@ -108,7 +120,11 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // ✅ Revoke all access tokens for the user
+        // ✅ Set user as inactive
+        $user->is_active = 0;
+        $user->save();
+
+        // ✅ Revoke all access tokens
         Token::where('user_id', $user->id)->delete();
 
         return response()->json([

@@ -26,7 +26,8 @@ class UserController extends Controller {
         return response()->json([
             'success' => true,
             'payment_qrcode' => $admin->payment_qrcode ? asset('storage/payment_qrcodes/' . $admin->payment_qrcode) : null,
-            'email' => $admin->email
+            'email' => $admin->email,
+            'contact_number' => $admin->contact_number,
         ]);
     }    
     
@@ -41,17 +42,20 @@ class UserController extends Controller {
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->role, // ✅ Add this!
+                'role' => $user->role,
                 'address' => $user->address,
                 'bio' => $user->bio,
                 'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
+                'contact_number' => $user->contact_number, // ✅ ADD THIS LINE
                 'total_bookings' => Booking::where('user_id', $user->id)
-                                           ->where('status', 'approved')
+                                           ->where('status', 'returned')
                                            ->count(),
                 'loyalty_points' => $loyaltyPoints,
+                'earned_points' => $user->earned_points,
             ]
         ]);
     }
+    
     
 
     public function getLoyaltyHistory(Request $request)
@@ -75,6 +79,7 @@ public function update(Request $request) {
         'bio' => 'nullable|string',
         'image' => 'nullable|image|mimes:jpg,png,jpeg|max:2048',
         'payment_qrcode' => 'nullable|image|mimes:jpg,png,jpeg|max:2048',
+        'contact_number' => 'nullable|string|max:20',
     ]);
 
     if ($validator->fails()) {
@@ -119,6 +124,7 @@ public function update(Request $request) {
             'email' => $user->email,
             'address' => $user->address,
             'bio' => $user->bio,
+            'contact_number' => $user->contact_number,
             'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
             'payment_qrcode' => $user->payment_qrcode ? asset('storage/payment_qrcodes/' . $user->payment_qrcode) : null,
         ]

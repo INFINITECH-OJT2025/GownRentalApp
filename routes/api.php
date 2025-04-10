@@ -19,6 +19,14 @@ use App\Http\Controllers\ContactController;
 use App\Models\User;
 use App\Models\Chat;
 
+Route::post('/check-email', function (\Illuminate\Http\Request $request) {
+    $email = $request->input('email');
+    $exists = \App\Models\User::where('email', $email)->exists();
+
+    return response()->json(['exists' => $exists]);
+});
+Route::post('/check-contact', [AuthController::class, 'checkContact']);
+
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     $user = \App\Models\User::find($request->user()->id); // Fetch full user from DB
 
@@ -31,9 +39,13 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
         'name' => $user->name,
         'email' => $user->email,
         'role' => $user->role,
+        'contact_number' => $user->contact_number,
         'image' => $user->image ? asset('storage/profile_pictures/' . $user->image) : null,
+        'is_active' => $user->is_active, // ✅ Add this line
     ]);
 });
+
+Route::middleware('auth:api')->get('/booking-dates', [DashboardController::class, 'getBookingDates']);
 
 Route::get('/product/{id}/approved-bookings', function ($id) {
     $approvedBookings = Booking::where('product_id', $id)
@@ -105,38 +117,42 @@ Route::middleware(['auth:api'])->get('/bookings/check-review-eligibility/{produc
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        // ✅ Ensure the product exists
         if (!\App\Models\Product::find($productId)) {
             return response()->json(['success' => false, 'message' => 'Product not found'], 404);
         }
 
-        // ✅ Find all returned bookings of this user for this product
+        // ✅ Get returned bookings with ID + reference number
         $returnedBookings = \App\Models\Booking::where('user_id', $userId)
             ->where('product_id', $productId)
             ->where('status', 'returned')
-            ->pluck('reference_number'); // ✅ Get all returned booking references
+            ->get(['id', 'reference_number']);
 
         if ($returnedBookings->isEmpty()) {
-            return response()->json(['success' => true, 'can_review' => false, 'message' => 'No returned bookings found.']);
+            return response()->json([
+                'success' => true,
+                'can_review' => false,
+                'message' => 'No returned bookings found.',
+                'unreviewed_bookings' => []
+            ]);
         }
 
-        // ✅ Find all bookings that have already been reviewed
-        $reviewedBookings = \App\Models\Review::where('user_id', $userId)
-            ->whereIn('booking_id', function ($query) use ($returnedBookings) {
-                $query->select('id')
-                    ->from('bookings')
-                    ->whereIn('reference_number', $returnedBookings);
-            })
-            ->pluck('booking_id'); // ✅ Get all reviewed booking IDs
+        // ✅ Get already reviewed booking IDs
+        $reviewedBookingIds = \App\Models\Review::where('user_id', $userId)
+            ->whereIn('booking_id', $returnedBookings->pluck('id'))
+            ->pluck('booking_id');
 
-        // ✅ Find bookings that can still be reviewed
-        $unreviewedBookings = $returnedBookings->diff($reviewedBookings);
+        // ✅ Filter out reviewed ones
+        $unreviewed = $returnedBookings->filter(function ($booking) use ($reviewedBookingIds) {
+            return !$reviewedBookingIds->contains($booking->id);
+        });
+
+        $unreviewedRefs = $unreviewed->pluck('reference_number');
 
         return response()->json([
             'success' => true,
-            'can_review' => !$unreviewedBookings->isEmpty(), // ✅ Can review if there's an unreviewed booking
-            'has_reviewed' => $reviewedBookings->isNotEmpty(), // ✅ User has reviewed at least once
-            'unreviewed_bookings' => $unreviewedBookings->values(), // ✅ Send list of bookings user can review
+            'can_review' => !$unreviewedRefs->isEmpty(),
+            'has_reviewed' => $reviewedBookingIds->isNotEmpty(),
+            'unreviewed_bookings' => $unreviewedRefs->values(),
         ]);
 
     } catch (\Exception $e) {
@@ -145,12 +161,11 @@ Route::middleware(['auth:api'])->get('/bookings/check-review-eligibility/{produc
 });
 
 
-
 Route::get('/admin/qrcode', [UserController::class, 'getAdminQRCode']);
 
 Route::middleware('auth:api')->group(function () {
     // ✅ Booking Routes
-    Route::post('/bookings/apply-discount', [BookingController::class, 'applyDiscount'])->middleware('auth:api');
+    Route::post('/bookings/apply-discount', [BookingController::class, 'applyDiscount']);
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::get('/bookings/{referenceNumber}', [BookingController::class, 'show']);
     Route::post('/bookings/upload-receipt', [BookingController::class, 'uploadReceipt']);
@@ -164,6 +179,7 @@ Route::middleware('auth:api')->group(function () {
 Route::middleware('auth:api')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']); // Fetch dashboard stats
     Route::get('/products', [DashboardController::class, 'getProducts']); // Fetch products
+    Route::get('/products-with-counts', [DashboardController::class, 'getProductsWithCounts']);
     Route::get('/inventory', [DashboardController::class, 'getInventory']); // Fetch inventory list
     Route::get('/inventory/{id}', [DashboardController::class, 'getInventoryItem']); // Fetch single item
     Route::post('/inventory', [DashboardController::class, 'addInventory']); // Add new item
@@ -179,8 +195,17 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/reviews', [ReviewController::class, 'getAllReviews']); // ✅ Fetch all reviews
     Route::post('/admin/reviews/{id}/reply', [ReviewController::class, 'replyToReview']);
     Route::get('/admin/products', [ProductController::class, 'adminIndex']);
+    Route::put('/inventory/{id}/minus-stock', [DashboardController::class, 'minusStock']);
 
 });
+
+Route::middleware('auth:api')->group(function () {
+    // ... other routes
+
+    // ✅ This should be inside this group
+    Route::put('/reviews/{id}', [ReviewController::class, 'update']);
+});
+
 
 // ✅ API to get wishlist count for a product
 Route::get('/product/{id}/wishlist-count', function ($id) {
@@ -251,6 +276,7 @@ Route::middleware('auth:api')->get('/bookings/count', function (Request $request
 // ✅ Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
 
 // ✅ Public Routes
 Route::middleware(['auth:api'])->group(function () {

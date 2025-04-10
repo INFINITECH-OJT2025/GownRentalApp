@@ -19,7 +19,7 @@ class ReviewController extends Controller
 
     $reviews = Review::where('product_id', $productId)
         ->with(['user:id,name'])
-        ->select('id', 'product_id', 'user_id', 'rating', 'comment', 'admin_reply', 'created_at')
+        ->select('id', 'product_id', 'user_id', 'rating', 'comment', 'admin_reply', 'created_at', 'edit_count')
         ->get();
 
     if ($reviews->isEmpty()) {
@@ -36,7 +36,7 @@ public function createReview(Request $request)
             'product_id' => 'required|exists:products,id',
             'booking_reference' => 'required|exists:bookings,reference_number', // ✅ Ensure reference number is used
             'rating' => 'required|integer|min:1|max:5',
-            'comment' => 'nullable|string|max:500',
+            'comment' => 'nullable|string|max:5000',
         ]);
 
         $userId = Auth::id();
@@ -87,21 +87,48 @@ public function createReview(Request $request)
     }
 }
 
+public function update(Request $request, $id)
+{
+    $review = Review::findOrFail($id);
+
+    if (auth()->id() !== $review->user_id) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    if ($review->edit_count >= 2) {
+        return response()->json(['message' => 'You can only edit a review 2 times.'], 403);
+    }
+
+    $review->update([
+        'rating' => $request->rating,
+        'comment' => $request->comment,
+        'edit_count' => $review->edit_count + 1,
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Review updated successfully', 'review' => $review]);
+}
+
 
 public function getAllReviews()
 {
-    $reviews = Review::with(['user:id,name', 'product:id,name'])
-        ->select('id', 'product_id', 'user_id', 'rating', 'comment', 'admin_reply', 'created_at')
-        ->orderBy('created_at', 'desc') // ✅ Ensure sorting by latest reviews
-        ->get();
+    $reviews = Review::with([
+        'user:id,name', 
+        'product:id,name', 
+        'booking' // no field restriction
+    ])
+    ->select('id', 'product_id', 'user_id', 'booking_id', 'rating', 'comment', 'admin_reply', 'created_at', 'edit_count')
+    ->orderBy('created_at', 'desc')
+    ->get();
 
     return response()->json(['success' => true, 'reviews' => $reviews]);
-}   
+}
+
+
 
 public function replyToReview(Request $request, $id)
 {
     $request->validate([
-        'reply' => 'required|string|max:500',
+        'reply' => 'required|string|max:5000',
     ]);
 
     $review = Review::find($id);

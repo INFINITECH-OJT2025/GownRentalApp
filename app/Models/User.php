@@ -10,7 +10,7 @@ use Laravel\Passport\HasApiTokens;
 class User extends Authenticatable {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $fillable = ['name', 'email', 'password', 'image', 'address', 'bio', 'role', 'payment_qrcode', 'total_bookings', 'loyalty_points', 'updated_at'];
+    protected $fillable = ['name', 'email', 'password', 'image', 'address', 'bio', 'role', 'payment_qrcode', 'total_bookings', 'loyalty_points', 'updated_at', 'contact_number', 'points_to_use', 'earned_points', 'used_points', 'is_active'];
 
     protected $hidden = ['password', 'remember_token'];
 

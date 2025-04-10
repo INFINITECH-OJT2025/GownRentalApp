@@ -3,41 +3,63 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use Illuminate\Support\Facades\DB;
+
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
     public function index()
-    {
-        // ✅ Fetch only visible products (`is_hidden = 0`)
-        $products = Product::where('is_hidden', 0)->get();  
-    
-        $products->transform(function ($product) {
-            $product->image_url = asset('storage/' . ltrim($product->image, 'storage/'));
-    
-            // ✅ Calculate blocked dates
-            $blockedDates = [];
-            if ($product->start_date && $product->end_date) {
-                $start = new \DateTime($product->start_date);
-                $end = new \DateTime($product->end_date);
-                while ($start <= $end) {
-                    $blockedDates[] = $start->format('Y-m-d');
-                    $start->modify('+1 day');
-                }
+{
+    $products = Product::where('is_hidden', 0)
+        ->leftJoin('bookings', function ($join) {
+            $join->on('products.id', '=', 'bookings.product_id')
+                ->where('bookings.status', 'returned');
+        })
+        ->select('products.*', DB::raw('COUNT(bookings.id) as returned_count'))
+        ->groupBy(
+            'products.id',
+            'products.name',
+            'products.price',
+            'products.discounted_price',
+            'products.stock',
+            'products.category',
+            'products.description',
+            'products.image',
+            'products.start_date',
+            'products.end_date',
+            'products.created_at',
+            'products.updated_at',
+            'products.is_hidden',
+            'products.sizes'
+        )        
+        ->orderBy('created_at', 'desc') // default sort
+        ->get();
+
+    $products->transform(function ($product) {
+        $product->image_url = asset('storage/' . ltrim($product->image, 'storage/'));
+
+        // Blocked Dates
+        $blockedDates = [];
+        if ($product->start_date && $product->end_date) {
+            $start = new \DateTime($product->start_date);
+            $end = new \DateTime($product->end_date);
+            while ($start <= $end) {
+                $blockedDates[] = $start->format('Y-m-d');
+                $start->modify('+1 day');
             }
-            $product->blocked_dates = $blockedDates;
-    
-            // ✅ Include stock and stock status
-            $product->stock_status = $product->stock > 0 ? 'Available' : 'Out of Stock';
-    
-            return $product;
-        });
-    
-        return response()->json([
-            'success' => true,
-            'data' => $products
-        ]);
-    }
+        }
+        $product->blocked_dates = $blockedDates;
+        $product->stock_status = $product->stock > 0 ? 'Available' : 'Out of Stock';
+
+        return $product;
+    });
+
+    return response()->json([
+        'success' => true,
+        'data' => $products
+    ]);
+}
     
     public function adminIndex()
 {
@@ -107,32 +129,59 @@ public function updateDiscount(Request $request, $id)
     }
 
     public function show($id)
-{
-    $product = Product::find($id);
-
-    if (!$product) {
-        return response()->json(['success' => false, 'message' => 'Product Loading'], 404);
+    {
+        $product = Product::find($id);
+    
+        if (!$product) {
+            return response()->json(['success' => false, 'message' => 'Product not found'], 404);
+        }
+    
+        // Find grouped items (same gown, different sizes/variants)
+        $groupedProducts = Product::where('name', $product->name)
+            ->where('price', $product->price)
+            ->where('category', $product->category)
+            ->where('description', $product->description)
+            ->where('image', $product->image)
+            ->get();
+    
+        // 🔍 Build detailed stock map with product_id per size
+        $sizeStockMap = $groupedProducts->flatMap(function ($variant) {
+            $sizes = array_map('trim', explode(',', $variant->sizes));
+            return collect($sizes)->map(function ($size) use ($variant) {
+                return [
+                    'size' => $size,
+                    'stock' => $variant->stock,
+                    'product_id' => $variant->id,
+                ];
+            });
+        })->values();
+    
+        $uniqueSizes = $sizeStockMap->pluck('size')->unique()->values();
+        $totalStock = $groupedProducts->sum('stock');
+        $startDate = $groupedProducts->min('start_date');
+        $endDate = $groupedProducts->max('end_date');
+    
+        return response()->json([
+            'success' => true,
+            'product' => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'image_url' => asset('storage/' . $product->image),
+                'price' => $product->price,
+                'discounted_price' => $product->discounted_price,
+                'stock' => $product->stock,
+                'totalStock' => $totalStock,
+                'stock_status' => $totalStock > 0 ? 'Available' : 'Out of Stock',
+                'description' => $product->description,
+                'category' => $product->category,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'sizes' => $uniqueSizes,
+                'size_stock' => $sizeStockMap, // ✅ structured as list of {size, stock, product_id}
+            ]
+        ]);
     }
-
-    return response()->json([
-        'success' => true,
-        'product' => [
-            'id' => $product->id,
-            'name' => $product->name,
-            'image_url' => asset('storage/' . $product->image),
-            'price' => $product->price,
-            'discounted_price' => $product->discounted_price,
-            'stock' => $product->stock,
-            'stock_status' => $product->stock > 0 ? 'Available' : 'Out of Stock', // ✅ Stock status
-            'description' => $product->description,
-            'category' => $product->category,
-            'start_date' => $product->start_date,
-            'end_date' => $product->end_date,
-            'sizes' => $product->sizes,
-        ]
-    ]);
-}
-
+    
 
 public function update(Request $request, $id)
 {

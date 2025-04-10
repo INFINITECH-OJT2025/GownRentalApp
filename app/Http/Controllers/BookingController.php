@@ -75,8 +75,9 @@ public function applyDiscount(Request $request)
     }
 
     // ✅ Deduct points from user correctly
-    $user->loyalty_points -= $validated['points_to_use'];
-    $user->save();
+    $user->used_points += $validated['points_to_use'];
+    $user->loyalty_points = max(0, $user->earned_points - $user->used_points);
+    $user->save();    
 
     // ✅ Deduct points from final price
     $originalTotal = ($booking->discounted_price ?? $booking->total_price) + $booking->added_price;
@@ -95,23 +96,52 @@ public function applyDiscount(Request $request)
     ]);
 }
 
-    // ✅ Get authenticated user's bookings
-    public function userBookings(Request $request)
-    {
-        $user = Auth::user(); // ✅ Get the authenticated user
+public function userBookings(Request $request)
+{
+    $user = Auth::user(); // Get the authenticated user
 
-        $bookings = Booking::with('product') // ✅ Eager load product details
-            ->where('user_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get(); // ✅ Fetch user-specific bookings
+    $bookings = Booking::with('product') // Eager load the product details
+        ->where('user_id', $user->id)
+        ->orderBy('created_at', 'desc')
+        ->get(); // Fetch all the user's bookings
 
-        return response()->json([
-            'success' => true,
-            'bookings' => $bookings,
-        ]);
-    }
+    return response()->json([
+        'success' => true,
+        'bookings' => $bookings->map(function($booking) {
 
-    public function cancelBooking($referenceNumber)
+            $totalPrice = $booking->total_price ?? 0;
+            $addedPrice = $booking->added_price ?? 0;
+
+            return [
+                'id' => $booking->id,
+                'reference_number' => $booking->reference_number,
+                'has_review' => \App\Models\Review::where('booking_id', $booking->id)->exists(),
+                'product' => $booking->product ? [
+                    'id' => $booking->product->id,
+                    'name' => $booking->product->name,
+                    'description' => $booking->product->description,
+                    'image_url' => asset('storage/' . $booking->product->image),
+                    'price' => (float) ($booking->product->price ?? 0),
+                    'discounted_price' => (float) ($booking->product->discounted_price ?? 0),
+                    'stock' => (int) ($booking->product->stock ?? 0), // ✅ Add this line
+                ] : null,
+                'sizes' => $booking->sizes,
+                'start_date' => $booking->start_date,
+                'end_date' => $booking->end_date,
+                'gcash_receipt' => $booking->gcash_receipt,
+                'status' => $booking->status,
+                'total_price' => (float) $totalPrice, // Make sure to include total_price
+                'added_price' => (float) $addedPrice,
+                'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
+                'created_at' => $booking->created_at,
+                'updated_at' => $booking->updated_at,
+            ];
+        }),
+    ]);
+}
+
+
+public function cancelBooking($referenceNumber)
 {
     $booking = Booking::where('reference_number', $referenceNumber)->first();
 
@@ -123,13 +153,9 @@ public function applyDiscount(Request $request)
         return response()->json(['success' => false, 'message' => 'Booking already canceled'], 400);
     }
 
-    // ✅ Restore stock
-    $product = Product::find($booking->product_id);
-    $product->increment('stock', 1);
-    $product->save();
-
-    // ✅ Update booking status
+    // ✅ Mark canceled by customer
     $booking->status = 'canceled';
+    $booking->canceled_by = 'customer';
     $booking->save();
 
     // ✅ Send Cancellation Email
@@ -141,6 +167,7 @@ public function applyDiscount(Request $request)
 
     return response()->json(['success' => true, 'message' => 'Booking canceled successfully. A confirmation email has been sent.']);
 }
+
 
 public function uploadReceipt(Request $request)
 {
@@ -184,20 +211,29 @@ public function uploadReceipt(Request $request)
         ], 400);
     }
 
-    // ✅ Ensure stock is available
-    if ($product->stock <= 0) {
+    $selectedSize = $booking->sizes;
+
+    // 🔄 Updated this part to use name + size logic (no ProductSize model needed)
+    $sizeStock = Product::where('name', $product->name)
+        ->where('sizes', $selectedSize)
+        ->first();
+
+    if (!$sizeStock || $sizeStock->stock <= 0) {
         return response()->json([
             'success' => false,
-            'message' => 'Product is out of stock! Please contact support.',
+            'message' => 'Sorry, this item is out of stock! You might be interested in similar products.',
         ], 400);
     }
+
 
     // ✅ Store receipt in "storage/app/public/receipts"
     $path = $request->file('receipt')->store('receipts', 'public');
 
-    // ✅ Deduct stock only on first receipt upload
-    $product->decrement('stock', 1);
-    $product->save();
+       // ✅ Deduct stock only on first receipt upload
+       $sizeStock->decrement('stock', 1);
+       $sizeStock->save(); // Save size-specific row
+   
+   
 
     // ✅ Update booking with receipt path
     $booking->gcash_receipt = $path;
@@ -257,30 +293,20 @@ public function store(Request $request)
 }
 
 
-    public function approveBooking($id)
+public function approveBooking($id)
 {
     $booking = Booking::findOrFail($id);
-    $user = $booking->user;
 
     if ($booking->status !== "pending") {
         return response()->json(["message" => "Booking must be pending before approval."], 400);
     }
 
-    // ✅ Approve booking
+    // ✅ Approve the booking
     $booking->status = "approved";
     $booking->save();
 
-    // ✅ Correctly count approved bookings
-    $user->total_bookings = Booking::where('user_id', $user->id)
-                                   ->where('status', 'approved')
-                                   ->count();
-
-        // ✅ Ensure user has all milestone points
-            $earnedPoints = floor($user->total_bookings / 3) * 100;
-            $user->loyalty_points = $earnedPoints;
-                    
-
-    $user->save();
+    // ✅ Refresh the user to get updated values after trigger runs
+    $user = $booking->user->fresh();
 
     return response()->json([
         "message" => "Booking approved successfully!",
@@ -289,11 +315,12 @@ public function store(Request $request)
     ]);
 }
 
+
 public function index(Request $request)
 {
     try {
         // ✅ Fetch all bookings with user, product names, and sizes
-        $bookings = Booking::with(['user:id,name', 'product:id,name']) // Eager load related models
+        $bookings = Booking::with(['user:id,name,contact_number', 'product:id,name'])
             ->orderBy('created_at', 'desc')
             ->get(); // Fetch all bookings with sizes
 
@@ -301,6 +328,7 @@ public function index(Request $request)
             'success' => true,
             'bookings' => $bookings
         ], 200);
+
     } catch (\Exception $e) {
         return response()->json([
             'success' => false,

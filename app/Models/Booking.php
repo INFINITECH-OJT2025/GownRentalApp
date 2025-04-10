@@ -21,7 +21,9 @@ class Booking extends Model
         'reference_number',
         'voucher_fee', 
         'discounted_price',
-        'sizes'
+        'sizes',
+        'created_at',
+        'canceled_by',
     ];
     
 
@@ -36,6 +38,8 @@ class Booking extends Model
     {
         return $this->belongsTo(Product::class);
     }
+    
 }
+
 
 

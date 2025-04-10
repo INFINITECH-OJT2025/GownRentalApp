@@ -11,7 +11,7 @@ class Product extends Model
 
     protected $fillable = [
         'name', 'price', 'category', 'stock', 'description',
-        'start_date', 'end_date', 'image', 'is_hidden', 'discounted_price', 'sizes'
+        'start_date', 'end_date', 'image', 'is_hidden', 'discounted_price', 'sizes', 'created_at', 'updated_at'
     ];
     
     public function applyDiscount($percentage)
@@ -20,15 +20,19 @@ class Product extends Model
             $discountAmount = ($this->price * $percentage) / 100;
             $this->discounted_price = $this->price - $discountAmount;
         } else {
-            $this->discounted_price = null; // No discount
+            $this->discounted_price = null;
         }
         $this->save();
     }
 
     public function getStockStatusAttribute()
-{
-    return $this->stock > 0 ? 'Available' : 'Out of Stock';
+    {
+        return $this->stock > 0 ? 'Available' : 'Out of Stock';
+    }
+
+    // ✅ Optional helper for size grouping
+    public function variantsBySize()
+    {
+        return self::where('name', $this->name)->get();
+    }
 }
-    
-}
-    

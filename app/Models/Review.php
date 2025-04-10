@@ -9,7 +9,7 @@ class Review extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['product_id', 'user_id', 'booking_id', 'rating', 'comment', 'admin_reply', 'created_at'];
+    protected $fillable = ['product_id', 'user_id', 'booking_id', 'rating', 'comment', 'admin_reply', 'created_at', 'edit_count'];
 
     public function user()
     {
@@ -21,9 +21,10 @@ class Review extends Model
         return $this->belongsTo(Product::class);
     }
 
-    public function booking()
+    public function booking() // default and primary relation
     {
-        return $this->belongsTo(Booking::class, 'booking_reference', 'reference_number');
+        return $this->belongsTo(Booking::class, 'booking_id', 'id');
     }
+    
     
 }
