@@ -12,6 +12,7 @@ use App\Mail\BookingConfirmationMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use App\Mail\BookingCanceledMail;
+use App\Models\StockAdjustment;
 
 class BookingController extends Controller
 {
@@ -229,11 +230,15 @@ public function uploadReceipt(Request $request)
     // ✅ Store receipt in "storage/app/public/receipts"
     $path = $request->file('receipt')->store('receipts', 'public');
 
-       // ✅ Deduct stock only on first receipt upload
-       $sizeStock->decrement('stock', 1);
-       $sizeStock->save(); // Save size-specific row
-   
-   
+    $sizeStock->decrement('stock', 1);
+    $sizeStock->save(); // Save size-specific row
+    
+    \App\Models\StockAdjustment::create([
+        'product_id' => $sizeStock->id,
+        'stock_added' => -1,
+        'remarks' => 'Stock auto-adjusted via customer (Ref: ' . $booking->reference_number . ')',
+    ]);
+    
 
     // ✅ Update booking with receipt path
     $booking->gcash_receipt = $path;
