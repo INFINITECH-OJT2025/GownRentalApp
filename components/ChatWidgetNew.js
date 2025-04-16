@@ -186,7 +186,7 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
         setTimeout(() => {
           const iframe = document.querySelector("#talkjs-desktop-inbox-container iframe");
           if (iframe) {
-            iframe.style.zIndex = "10050";
+            iframe.style.zIndex = "10070";
             iframe.style.position = "relative";
           }
         }, 500); // Wait a moment after mount
@@ -287,11 +287,11 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
   return (
     <>
     {/* Desktop: TalkJS Inbox with Combobox on top */}
-{!isMobile && chatLoaded && showDesktopInbox && (
-  <div
-  className="fixed bottom-12 right-5 z-[10010] rounded-xl shadow-lg bg-white border flex flex-col"
-  style={{ width: "400px", height: "600px" }}
->
+    {!isMobile && chatLoaded && showDesktopInbox && (
+      <div
+      className="fixed bottom-12 right-5 z-[101000] rounded-xl shadow-lg bg-white border flex flex-col"
+      style={{ width: "400px", height: "600px" }}
+    >
 
     {/* 👤 Combobox at the top */}
     <div className="p-2 border-b bg-white relative z-[10]">
@@ -403,7 +403,7 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
     {/* Mobile Fullscreen Chat */}
 {/* Mobile Fullscreen Chat */}
 {isMobile && showMobileInbox && (
-  <div className="fixed top-12 left-0 right-0 bottom-0 z-[10050] bg-white flex flex-col">
+  <div className="fixed top-20 left-0 right-0 bottom-0 z-[10050] bg-white flex flex-col">
     
     {/* 🧭 Header with Title + ComboBox */}
     <div className="flex flex-col gap-2 px-4 py-2 border-b bg-white z-[1000002]">

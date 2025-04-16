@@ -1,7 +1,7 @@
 "use client";
 
 import Head from "next/head";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import DataTable from "react-data-table-component";
 import { useRouter } from "next/navigation";
@@ -27,6 +27,8 @@ export default function BookHistoryPage() {
     const [filterStatus, setFilterStatus] = useState("");
     const [loadingAction, setLoadingAction] = useState(null);
     const [showFullDescription, setShowFullDescription] = useState(false);
+    const columnDropdownRef = useRef(null);
+    const columnToggleRef = useRef(null);
 
     const [startDate, setStartDate] = useState("");
     const [isExportingCSV, setIsExportingCSV] = useState(false);
@@ -296,6 +298,21 @@ useEffect(() => {
   localStorage.setItem("visibleColumns", JSON.stringify(visibleColumns));
 }, [visibleColumns]);
 
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (
+      columnDropdownRef.current &&
+      !columnDropdownRef.current.contains(event.target) &&
+      columnToggleRef.current &&
+      !columnToggleRef.current.contains(event.target)
+    ) {
+      setShowColumnDropdown(false);
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => document.removeEventListener("mousedown", handleClickOutside);
+}, []);
 
 
 useEffect(() => {
@@ -683,23 +700,10 @@ const handleShowProduct = (bookingRow) => {
             </Head>
 
             <div className="min-h-screen bg-pink-50 text-gray-800 font-poppins">
+          
                 <Navbar />
 
-                <section className="relative z-50">
-                {receiptRequiredBookings.length > 0 && (
-                    <div
-                        className="fixed bottom-24 right-10 bg-yellow-500 rounded-full p-4 cursor-pointer shadow-xl flex items-center justify-center gap-2"
-                        onClick={handleAttentionModalOpen}
-                    >
-                        <FaExclamationCircle className="text-white text-xl" />
-                        <span className="text-white text-lg font-bold">
-                        {receiptRequiredBookings.length}
-                        </span>
-                    </div>
-                    )}
-
-                    </section>
-
+                
     
     
                 {/* Page Header - Adjusted for More Spacing */}
@@ -713,7 +717,6 @@ const handleShowProduct = (bookingRow) => {
                     </p>
                 </section>
 
-                  
     
                 {/* Search & Filter Section */}
                 <div className="flex flex-col md:flex-row justify-between items-center px-6 md:px-16 mt-6 space-y-4 md:space-y-0">
@@ -759,11 +762,35 @@ const handleShowProduct = (bookingRow) => {
                     </div>
 
                     <div className="px-6 md:px-16 mt-6">
+                  {receiptRequiredBookings.length > 0 && (
+                    <div className="flex mb-4">
+                      <div
+                        onClick={handleAttentionModalOpen}
+                        className="flex items-center gap-1 bg-yellow-400 text-white rounded-full px-2 py-1 text-xs font-semibold shadow cursor-pointer"
+                        title="Click to view pending receipts"
+                      >
+                        <FaExclamationCircle className="w-7 h-7" />
+                        <span className="text-white text-lg flex items-center justify-center font-bold">
+                          {receiptRequiredBookings.length}
+                        </span>
+                        <span className="pl-0">
+                          {receiptRequiredBookings.length === 1 ? "pending receipt" : "pending receipts"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+
+                      
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Left side: Date, Export, Search */}
+                        
               
                         <div className="flex flex-col gap-4">
-                          {/* Row 1: Date + Export buttons */}
+
+                       
+                       
+                                                {/* Row 1: Date + Export buttons */}
                           <div className="flex flex-wrap items-center gap-2">
                             <label className="text-sm font-semibold whitespace-nowrap">
                               Booking Creation Date:
@@ -806,84 +833,90 @@ const handleShowProduct = (bookingRow) => {
                           />
                       </div>
 
-                        {/* Right side: Filter Columns + Status */}
-                        <div className="flex flex-col items-end gap-3">
-                          {/* Row 1: Filter Columns */}
-                          <div className="relative z-2">
-                            <button
-                              onClick={() => setShowColumnDropdown(!showColumnDropdown)}
-                              className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 flex items-center gap-2"
+                      <div className="flex flex-col items-end gap-2 px-6 md:px-16 mt-4 z-3">
+                        {/* Filter Columns Button */}
+                        <div className="relative">
+                        <button
+                          ref={columnToggleRef}
+                          onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                          className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 flex items-center gap-2"
+                        >
+                          <Menu size={18} />
+                          {showColumnDropdown ? "Hide Filters" : "Filter Columns"}
+                        </button>
+
+                          {showColumnDropdown && (
+                            <div
+                              ref={columnDropdownRef}
+                              className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 p-4 max-h-60 overflow-y-auto z-50"
                             >
-                              <Menu size={18} />
-                              {showColumnDropdown ? "Hide Filters" : "Filter Columns"}
-                            </button>
-                            {showColumnDropdown && (
-                              <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 p-4 max-h-60 overflow-y-auto">
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="font-semibold text-sm text-gray-800">Quick Select:</span>
-                                  <button
-                                    onClick={() => {
-                                      const allChecked = Object.values(visibleColumns).every(Boolean);
-                                      const updated = Object.fromEntries(
-                                        Object.entries(visibleColumns).map(([k]) => [k, !allChecked])
-                                      );
-                                      setVisibleColumns(updated);
-                                    }}
-                                    className="text-sm text-pink-600 hover:underline"
-                                  >
-                                    {Object.values(visibleColumns).every(Boolean) ? "Deselect All" : "Select All"}
-                                  </button>
-                                </div>
-                                {Object.entries(visibleColumns).map(([key, value]) => (
-                                  <label key={key} className="flex items-center space-x-2 mb-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={value}
-                                      onChange={() =>
-                                        setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }))
-                                      }
-                                    />
-                                  <span className="capitalize text-sm">
-                                      {{
-                                        reference_number: "Reference #",
-                                        product: "Product",
-                                        sizes: "Size",
-                                        start_date: "Start Date",
-                                        end_date: "End Date",
-                                        price: "Price",
-                                        discounted_price: "Discounted Price",
-                                        added_price: "Added Price",
-                                        voucher_fee: "Voucher Fee",
-                                        total_price: "Total Price",
-                                        status: "Status",
-                                        created_at: "Created Date", // 👈 rename here
-                                        actions: "Actions"
-                                      }[key] || key.replace(/_/g, " ")}
-                                    </span>
 
-                                  </label>
-                                ))}
+                              <div className="flex items-center justify-between mb-3">
+                                <span className="font-semibold text-sm text-gray-800">Quick Select:</span>
+                                <button
+                                  onClick={() => {
+                                    const allChecked = Object.values(visibleColumns).every(Boolean);
+                                    const updated = Object.fromEntries(
+                                      Object.entries(visibleColumns).map(([k]) => [k, !allChecked])
+                                    );
+                                    setVisibleColumns(updated);
+                                  }}
+                                  className="text-sm text-pink-600 hover:underline"
+                                >
+                                  {Object.values(visibleColumns).every(Boolean) ? "Deselect All" : "Select All"}
+                                </button>
                               </div>
-                            )}
-                          </div>
-
-                          {/* Row 2: Status Dropdown */}
-                          <select
-                            className="border p-2 rounded w-[200px]"
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                          >
-                            <option value="">
-                              📌 {startDate ? `All Status (Filtered by ${format(new Date(startDate), "dd-MMM-yyyy")})` : "All Status"}
-                            </option>
-                            <option value="pending">🟡 Pending</option>
-                            <option value="approved">✅ Approved</option>
-                            <option value="picked up">🟣 Picked Up</option>
-                            <option value="canceled">❌ Canceled</option>
-                            <option value="returned">✅ Returned</option>
-                          </select>
-
+                              {Object.entries(visibleColumns).map(([key, value]) => (
+                                <label key={key} className="flex items-center space-x-2 mb-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={value}
+                                    onChange={() =>
+                                      setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }))
+                                    }
+                                  />
+                                  <span className="capitalize text-sm">
+                                    {{
+                                      reference_number: "Reference #",
+                                      product: "Product",
+                                      sizes: "Size",
+                                      start_date: "Start Date",
+                                      end_date: "End Date",
+                                      price: "Price",
+                                      discounted_price: "Discounted Price",
+                                      added_price: "Added Price",
+                                      voucher_fee: "Voucher Fee",
+                                      total_price: "Total Price",
+                                      status: "Status",
+                                      created_at: "Created Date",
+                                      actions: "Actions"
+                                    }[key] || key.replace(/_/g, " ")}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
                         </div>
+
+                        {/* All Status Dropdown */}
+                        <select
+                          className="border p-2 rounded w-[200px]"
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                          <option value="">
+                            📌 {startDate ? `All Status (Filtered by ${format(new Date(startDate), "dd-MMM-yyyy")})` : "All Status"}
+                          </option>
+                          <option value="pending">🟡 Pending</option>
+                          <option value="approved">✅ Approved</option>
+                          <option value="picked up">🟣 Picked Up</option>
+                          <option value="canceled">❌ Canceled</option>
+                          <option value="returned">✅ Returned</option>
+                        </select>
+                      </div>
+
+
+
                       </div>
                     </div>
 
