@@ -198,7 +198,10 @@ export default function AdminDashboard() {
                             { title: "Pending Bookings", value: stats.pendingBookings, icon: <HiClock className="text-5xl text-pink-600" /> },
                             { title: "Completed Bookings", value: stats.completedBookings, icon: <HiCheckCircle className="text-5xl text-pink-600" /> },
                             ].map((item, index) => (
-                            <div key={index} className="bg-pink-100 shadow-md p-6 rounded-lg flex flex-col items-center">
+                                <div
+                                key={index}
+                                className="bg-pink-100 shadow-md p-6 rounded-lg flex flex-col items-center transition-transform duration-300 hover:shadow-2xl hover:scale-[1.03] cursor-pointer"
+                              >
                                 {item.icon}
                                 <h2 className="text-xl font-bold text-gray-700 text-center mt-2">{item.title}</h2>
                                 <p className="text-2xl font-bold">{item.value}</p>
@@ -263,7 +266,7 @@ export default function AdminDashboard() {
                                 <p className="text-gray-500">Loading products...</p> // Show loading message
                             ) : paginatedProducts.length > 0 ? (
                                 paginatedProducts.map((product) => (
-                                    <div key={product.id} className="bg-white p-4 rounded-lg shadow-md">
+                                    <div key={product.id} className="bg-white p-4 rounded-lg shadow-md transition-transform duration-300 hover:shadow-2xl hover:scale-[1.03] cursor-pointer">
                                         <div className="relative w-full h-48 md:h-64 flex justify-center items-center">
                                             {product.image_url ? (
                                                 <Image 

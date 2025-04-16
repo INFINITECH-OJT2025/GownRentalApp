@@ -688,7 +688,7 @@ const handleShowProduct = (bookingRow) => {
                 <section className="relative z-50">
                 {receiptRequiredBookings.length > 0 && (
                     <div
-                        className="fixed bottom-24 right-10 bg-yellow-500 rounded-full p-4 cursor-pointer shadow-xl flex items-center justify-center gap-2 z-50"
+                        className="fixed bottom-24 right-10 bg-yellow-500 rounded-full p-4 cursor-pointer shadow-xl flex items-center justify-center gap-2"
                         onClick={handleAttentionModalOpen}
                     >
                         <FaExclamationCircle className="text-white text-xl" />
@@ -809,7 +809,7 @@ const handleShowProduct = (bookingRow) => {
                         {/* Right side: Filter Columns + Status */}
                         <div className="flex flex-col items-end gap-3">
                           {/* Row 1: Filter Columns */}
-                          <div className="relative z-10">
+                          <div className="relative z-2">
                             <button
                               onClick={() => setShowColumnDropdown(!showColumnDropdown)}
                               className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 flex items-center gap-2"

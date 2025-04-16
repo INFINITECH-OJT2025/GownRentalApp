@@ -203,18 +203,16 @@ export default function SignupPage() {
                 },
             });
         
-            // ✅ This runs AFTER axios returns successfully
-            localStorage.setItem("token", response.data.token);
-            localStorage.setItem("user", JSON.stringify(response.data.user)); // Should include contact_number
         
             toast.success("You have been successfully signed up! Now you may log in.", {
                 duration: 3000,
                 position: "top-right",
-            });
-        
-            setTimeout(() => {
-                router.push("/login");
-            }, 3000);
+              });
+              
+              setTimeout(() => {
+                router.push("/login"); // go to login page
+              }, 3000);
+              
         } catch (err) {
             const res = err.response?.data;
         
@@ -252,11 +250,12 @@ export default function SignupPage() {
           <meta name="description" content="Explore beautiful gowns for rent on Gown Rental." />
           <link rel="icon" type="image/svg+xml" href="/gownrentalsicon.svg" />
         </Head>
-        <div className="min-h-screen pt-[100px] flex items-center justify-center bg-gradient-to-r from-pink-200 to-pink-400 px-6">
-              <GuestNavbar />
-              <div className="bg-transparent p-12 w-full max-w-lg flex flex-col items-center">
+        <div className="min-h-screen overflow-y-auto flex items-center justify-center bg-gradient-to-r from-pink-200 to-pink-400 px-3 py-3">
 
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-pink-300 w-full">
+              <GuestNavbar />
+              <div className="bg-transparent px-4 sm:px-8 py-10 w-full max-w-md sm:max-w-lg flex flex-col items-center">
+
+                <div className="bg-white p-5 rounded-2xl shadow-lg border border-pink-300 w-full mt-16">
                     <h2 className="text-3xl font-bold text-center text-pink-600 mb-4">Create an Account</h2>
                     <p className="text-gray-600 text-center mb-6">Join us and rent the gown of your dreams!</p>
 
@@ -272,9 +271,9 @@ export default function SignupPage() {
                             placeholder="Enter your full name"
                             required
                             />
-                            {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                            {errors.name && <p className="text-red-500 text-sm mt-1 h-1">{errors.name}</p>}
                             {!errors.name && formData.name && (
-                            <p className="text-green-600 text-sm mt-1">Looks good!</p>
+                            <p className="text-green-600 text-sm mt-1 h-1">Looks good!</p>
                             )}
 
                         </div>
@@ -289,9 +288,9 @@ export default function SignupPage() {
                             placeholder="Enter your email"
                             required
                         />
-                        {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                        {errors.email && <p className="text-red-500 text-sm mt-1 h-1">{errors.email}</p>}
                         {formData.email && !errors.email && (
-                            <p className="text-green-600 text-sm mt-1">Valid email!</p>
+                            <p className="text-green-600 text-sm mt-1 h-1">Valid email!</p>
                         )}
                     </div>
 
@@ -303,17 +302,17 @@ export default function SignupPage() {
                         value={formData.contact_number}
                         onChange={handleChange} // ✅ This will re-enable the uniqueness check
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-400 focus:border-transparent"
-                        placeholder="e.g. 09123456789"
+                        placeholder="Enter your contact number e.g. 09123456789"
                         required
                         />
 
 
                         {/* ✅ Inside your render form */}
                         {errors.contact_number && (
-                            <p className="text-red-500 text-sm mt-1">{errors.contact_number}</p>
+                            <p className="text-red-500 text-sm mt-1 h-1">{errors.contact_number}</p>
                         )}
                         {contactIsValid && (
-                            <p className="text-green-600 text-sm mt-1">Contact number is valid and available!</p>
+                            <p className="text-green-600 text-sm mt-1 h-1">Contact number is valid and available!</p>
                         )}
 
 
@@ -339,9 +338,9 @@ export default function SignupPage() {
                             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                             </span>
                         </div>
-                        {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+                        {errors.password && <p className="text-red-500 text-sm mt-1 h-1">{errors.password}</p>}
                         {!errors.password && formData.password && (
-                            <p className="text-green-600 text-sm mt-1">Strong enough!</p>
+                            <p className="text-green-600 text-sm mt-1 h-1">Strong enough!</p>
                         )}
                         </div>
 
@@ -365,12 +364,12 @@ export default function SignupPage() {
                                 </span>
                             </div>
                             {errors.password_confirmation && (
-                                <p className="text-red-500 text-sm mt-1">{errors.password_confirmation}</p>
+                                <p className="text-red-500 text-sm mt-1 h-1 h-1">{errors.password_confirmation}</p>
                             )}
                             {!errors.password_confirmation &&
                                 formData.password_confirmation &&
                                 formData.password_confirmation === formData.password && (
-                                <p className="text-green-600 text-sm mt-1">Passwords match!</p>
+                                <p className="text-green-600 text-sm mt-1 h-1">Passwords match!</p>
                             )}
                             </div>
 

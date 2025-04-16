@@ -8,6 +8,8 @@ import { FavoritesProvider } from "../context/FavoritesContext";
 import { Toaster } from "react-hot-toast";
 import { useEffect, useState } from "react";
 import ChatWidgetNew from "../components/ChatWidgetNew";
+import { UserProvider } from "../context/UserContext"; // ✅ NEW
+
 import Pusher from 'pusher-js';
 
 
@@ -176,6 +178,7 @@ export default function MyApp({ Component, pageProps }) {
     }, [chatAllowed]);
     
     return (
+      <UserProvider> 
         <BookProvider>
             <WishlistProvider>
                 <FavoritesProvider>
@@ -236,5 +239,7 @@ export default function MyApp({ Component, pageProps }) {
                 </FavoritesProvider>
             </WishlistProvider>
         </BookProvider>
+        </UserProvider>
+
     );
 }

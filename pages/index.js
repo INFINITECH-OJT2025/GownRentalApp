@@ -99,18 +99,6 @@ export default function HomePage() {
         return priceB - priceA;
       });
 
-      const bestSellerRankMap =
-      sortByDate === "best-seller"
-        ? sortedProducts
-            .filter(product => product.returned_count > 0) // ✅ Only consider products with returned bookings
-            .sort((a, b) => b.returned_count - a.returned_count)
-            .reduce((acc, product, i) => {
-              acc[product.id] = i + 1; // ✅ Assign dynamic Top N
-              return acc;
-            }, {})
-        : {};
-    
-    
     useEffect(() => {
         const fetchFavorites = async () => {
             const token = localStorage.getItem("token");
@@ -285,23 +273,39 @@ export default function HomePage() {
         product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
         product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
     );
-
+    const bestSellerRankMap =
+    sortByDate === "best-seller"
+      ? filteredProducts
+          .filter(product => product.returned_count > 0)
+          .sort((a, b) => b.returned_count - a.returned_count)
+          .reduce((acc, product, i) => {
+            acc[product.id] = i + 1; // Global Top N
+            return acc;
+          }, {})
+      : {};
+  
+  
     
-      const itemsPerPage = 6;
-
-    const startIndex = (currentPage - 1) * itemsPerPage;
+      const inStockItemsPerPage = 6;
+      const outOfStockItemsPerPage = 3;
 
     // STEP 2: Separate into in-stock and out-of-stock groups
     const inStockProducts = filteredProducts.filter(p => p.totalStock > 0);
     const outOfStockProducts = filteredProducts.filter(p => p.totalStock <= 0);
 
     // STEP 3: Paginate the filtered in-stock and out-of-stock products
-    const paginatedProducts = inStockProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    const outOfStockPaginated = outOfStockProducts.slice((currentOutOfStockPage - 1) * itemsPerPage, currentOutOfStockPage * itemsPerPage);
-
-    
-    const totalPages = Math.ceil(inStockProducts.length / itemsPerPage);
-    const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / itemsPerPage);
+    const paginatedProducts = inStockProducts.slice(
+        (currentPage - 1) * inStockItemsPerPage,
+        currentPage * inStockItemsPerPage
+      );
+      const outOfStockPaginated = outOfStockProducts.slice(
+        (currentOutOfStockPage - 1) * outOfStockItemsPerPage,
+        currentOutOfStockPage * outOfStockItemsPerPage
+      );
+      
+      const totalPages = Math.ceil(inStockProducts.length / inStockItemsPerPage);
+      const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / outOfStockItemsPerPage);
+      
     
     useEffect(() => {
         setCurrentPage(1);
@@ -327,29 +331,30 @@ export default function HomePage() {
                 <p className="mt-4 text-lg md:text-xl text-gray-800 drop-shadow-md">
                     Elegant styles, premium fabrics, and hassle-free gown rentals.
                 </p>
-                <div className="mt-6 flex flex-wrap justify-center md:justify-start">
+                <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-3">
+
+
                 <Link href="/browse">
-                <button 
+                <button
                     onClick={() => setLoadingButton("browse")}
                     disabled={loadingButton === "browse"}
                     className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                        ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                     {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
                 </button>
-            </Link>
+                </Link>
 
-            <Link href="/about">
-                <button 
+                <Link href="/about_new">
+                <button
                     onClick={() => setLoadingButton("learn")}
                     disabled={loadingButton === "learn"}
-                    className={`ml-4 border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                        ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                    ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                     {loadingButton === "learn" ? "Loading..." : "Learn More"}
                 </button>
-            </Link>
-
+                </Link>
 
                 </div>
             </div>
@@ -433,6 +438,7 @@ export default function HomePage() {
                     totalPages={outOfStockTotalPages}
                     setCurrentPage={setCurrentOutOfStockPage}
                     sortByDate={sortByDate} 
+                    bestSellerRankMap={bestSellerRankMap}
                     />
 
 

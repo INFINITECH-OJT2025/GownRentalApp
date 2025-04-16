@@ -44,9 +44,9 @@ export default function OutOfStockGownsSection({ products, currentPage, totalPag
               )}
 
               {/* Top 1 Ranking Badge */}
-              {sortByDate === "best-seller" && index === 0 && (
+              {sortByDate === "best-seller" && bestSellerRankMap[product.id] && bestSellerRankMap[product.id] <= 10 && (
                 <div className="absolute top-5 right-5 bg-pink-600 text-white py-1 px-3 rounded-full text-sm font-semibold shadow-md">
-                  TOP 1
+                  TOP {bestSellerRankMap[product.id]}
                 </div>
               )}
 

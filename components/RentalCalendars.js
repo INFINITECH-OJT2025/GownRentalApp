@@ -1,125 +1,118 @@
-import Calendar from "react-calendar";
+"use client";
+
+import { useState } from "react";
+import { DateRange } from "react-date-range";
+import { format, eachMonthOfInterval, isBefore, isAfter, startOfMonth } from "date-fns";
 import { toast } from "react-hot-toast";
-import { format } from "date-fns";
+import "react-date-range/dist/styles.css";
+import "react-date-range/dist/theme/default.css";
 
-export default function RentalCalendars({
-  product,
-  rentalDetails,
-  setRentalDetails,
-}) {
-  const handleDateChange = (type, value) => {
-    const formatted = format(new Date(value), "dd-MMM-yyyy");
+export default function RentalCalendars({ product, rentalDetails, setRentalDetails }) {
+  const minDate = new Date(product?.start_date);
+  const maxDate = new Date(product?.end_date);
 
-    if (type === "startDate") {
-      toast.success(`Start Date Selected: ${formatted}`, { position: "top-right" });
-      setRentalDetails((prev) => ({
-        ...prev,
-        startDate: value,
-        endDate: prev.endDate && new Date(prev.endDate) < new Date(value) ? null : prev.endDate,
-      }));
+  const [range, setRange] = useState([
+    {
+      startDate: rentalDetails.startDate ? new Date(rentalDetails.startDate) : null,
+      endDate: rentalDetails.endDate ? new Date(rentalDetails.endDate) : null,
+      key: "selection",
+    },
+  ]);
+
+  const [focusedMonth, setFocusedMonth] = useState(startOfMonth(minDate));
+
+  const handleSelect = (ranges) => {
+    const startDate = ranges.selection.startDate;
+    const endDate = ranges.selection.endDate;
+
+    if (!startDate || !endDate) return;
+
+    if (
+      range[0].startDate?.toDateString() === startDate.toDateString() &&
+      range[0].endDate?.toDateString() === endDate.toDateString()
+    )
+      return;
+
+    // First click
+    if (
+      startDate &&
+      endDate &&
+      startDate.toDateString() === endDate.toDateString()
+    ) {
+      setRange([
+        {
+          startDate,
+          endDate: startDate,
+          key: "selection",
+        },
+      ]);
+      setRentalDetails({ startDate, endDate: null });
+      return;
     }
 
-    if (type === "endDate") {
-      if (!rentalDetails.startDate) {
-        toast.error("Please select a Start Date first!", { position: "top-right" });
-        return;
-      }
-
-      const start = new Date(rentalDetails.startDate);
-      const selectedEnd = new Date(value);
-
-      if (selectedEnd <= start) {
-        toast.error("End Date must be after the Start Date.", {
-          position: "top-right",
-        });
-        return;
-      }
-
-      toast.success(`End Date Selected: ${formatted}`, { position: "top-right" });
-      setRentalDetails((prev) => ({ ...prev, endDate: value }));
+    if (isBefore(endDate, startDate)) {
+      toast.error("End date must be after start date.");
+      return;
     }
+
+    setRange([ranges.selection]);
+    setRentalDetails({ startDate, endDate });
   };
 
-  const isDateAvailable = (date, isStartDate = true) => {
-    if (!product?.start_date || !product?.end_date) return false;
-
-    const start = new Date(product.start_date);
-    const end = new Date(product.end_date);
-
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const startOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const endOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-
-    if (isStartDate) {
-      return dateOnly >= startOnly && dateOnly < endOnly;
+  const handleShownDateChange = (date) => {
+    const next = startOfMonth(date);
+  
+    if (isBefore(next, minDate)) {
+      setFocusedMonth(startOfMonth(minDate));
+    } else if (isAfter(next, maxDate)) {
+      setFocusedMonth(startOfMonth(maxDate));
     } else {
-      if (!rentalDetails.startDate) {
-        return dateOnly >= startOnly && dateOnly <= endOnly;
-      }
-
-      const selectedStart = new Date(rentalDetails.startDate);
-      selectedStart.setHours(0, 0, 0, 0);
-      return dateOnly > selectedStart && dateOnly <= endOnly;
+      setFocusedMonth(next);
     }
   };
+  
+  
 
   return (
-    <div className="flex flex-col md:flex-row gap-4 justify-center">
-      {/* Start Date */}
-      <div className="flex flex-col items-center w-full max-w-[280px]">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Start Date (Pick-Up)
-        </label>
-        <Calendar
-          value={rentalDetails.startDate ? new Date(rentalDetails.startDate) : null}
-          onChange={(date) => handleDateChange("startDate", date)}
-          tileDisabled={({ date }) => !isDateAvailable(date, true)}
-          tileClassName={({ date }) =>
-            isDateAvailable(date, true)
-              ? rentalDetails.startDate &&
-                new Date(rentalDetails.startDate).toDateString() === date.toDateString()
-                ? "react-calendar__tile--active"
-                : "available-date"
-              : "react-calendar__tile--disabled"
-          }
-          className="w-full rounded-lg shadow-sm border border-gray-300 p-2"
-          minDate={new Date(product.start_date)}
-          maxDate={new Date(product.end_date)}
-          prevLabel="‹"
-          nextLabel="›"
-          showNeighboringMonth={false}
-          defaultView="month"
-          maxDetail="month"
-        />
-      </div>
+    <div className="bg-white shadow-md rounded-lg p-6 w-full max-w-2xl mx-auto">
+   <div className="mb-4 px-3 sm:px-0 text-center w-full flex justify-center">
+  <p className="selected-range-label text-sm sm:text-base font-semibold text-gray-700 leading-tight break-words max-w-full sm:max-w-none">
+    Selected Range:
+    {range[0].startDate && !range[0].endDate ? (
+      <span className="text-pink-700 font-bold ml-1">
+        {format(range[0].startDate, "EEE, dd-MMM-yyyy")} (Start Date)
+      </span>
+    ) : range[0].startDate && range[0].endDate ? (
+      range[0].startDate.toDateString() === range[0].endDate.toDateString() ? (
+        <span className="text-pink-700 font-bold ml-1">
+          {format(range[0].startDate, "EEE, dd-MMM-yyyy")}
+        </span>
+      ) : (
+        <span className="text-pink-700 font-bold ml-1">
+          {format(range[0].startDate, "EEE, dd-MMM-yyyy")} to{" "}
+          {format(range[0].endDate, "EEE, dd-MMM-yyyy")}
+        </span>
+      )
+    ) : (
+      <span className="text-gray-400 font-semibold ml-2">None selected</span>
+    )}
+  </p>
+</div>
 
-      {/* End Date */}
-      <div className="flex flex-col items-center w-full max-w-[280px]">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          End Date (Return Due)
-        </label>
-        <Calendar
-          value={rentalDetails.endDate ? new Date(rentalDetails.endDate) : null}
-          onChange={(date) => handleDateChange("endDate", date)}
-          tileDisabled={({ date }) => !isDateAvailable(date, false)}
-          tileClassName={({ date }) =>
-            isDateAvailable(date, false)
-              ? rentalDetails.endDate &&
-                new Date(rentalDetails.endDate).toDateString() === date.toDateString()
-                ? "react-calendar__tile--active"
-                : "available-date"
-              : "react-calendar__tile--disabled"
-          }
-          className="w-full rounded-lg shadow-sm border border-gray-300 p-2"
-          minDate={new Date(product.start_date)}
-          maxDate={new Date(product.end_date)}
-          prevLabel="‹"
-          nextLabel="›"
-          showNeighboringMonth={false}
-          defaultView="month"
-          maxDetail="month"
-        />
-      </div>
+      <div className="w-full max-w-[440px] mx-auto px-2 sm:px-0">
+      <DateRange
+        className="w-full"
+        editableDateInputs={true}
+        onChange={handleSelect}
+        moveRangeOnFirstSelection={false}
+        ranges={range}
+        minDate={minDate}
+        maxDate={maxDate}
+        initialFocusedDate={focusedMonth}
+        onShownDateChange={handleShownDateChange}
+      />
+    </div>
+
     </div>
   );
 }

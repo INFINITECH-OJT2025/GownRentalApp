@@ -11,6 +11,7 @@ import axios from "axios";
 import DataTable from "react-data-table-component"; // ✅ Import react-data-table-component
 import { toast } from "react-hot-toast";
 import { format } from "date-fns"; 
+import { useUser } from "../context/UserContext";
 
 export default function ProfilePage() {
     const [loyaltyHistory, setLoyaltyHistory] = useState([]);
@@ -31,17 +32,9 @@ export default function ProfilePage() {
     const [totalBookings, setTotalBookings] = useState(0);
     const [loyaltyPoints, setLoyaltyPoints] = useState(0);
     const [saving, setSaving] = useState(false); // ✅ New state for saving
-    const [userRole, setUserRole] = useState(null);
+    const [ setUserRole] = useState(null);
+    const { user, updateUser, userRole } = useUser();
 
-    useEffect(() => {
-    if (typeof window !== "undefined") {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUserRole(parsedUser?.role || null);
-        }
-    }
-    }, []);
 
 
     useEffect(() => {
@@ -167,6 +160,14 @@ export default function ProfilePage() {
             });
     
             toast.success("Profile updated successfully!", { position: "top-right" });
+            updateUser(response.data.user);
+            setImagePreview(response.data.user.image);
+            
+            // Optional hard refresh
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+            
     
             if (response.data.user.image) {
                 setImagePreview(response.data.user.image);

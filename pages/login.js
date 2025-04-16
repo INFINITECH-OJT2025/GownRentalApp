@@ -105,7 +105,7 @@ export default function LoginPage() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-pink-200 to-pink-400 px-6">
               <GuestNavbar />
             {/* ✅ Outer White Rounded Background */}
-            <div className="bg-transparent p-12 w-full max-w-lg flex flex-col items-center">
+            <div className="bg-transparent px-4 sm:px-8 py-12 w-full max-w-md sm:max-w-lg flex flex-col items-center">
                 {/* ✅ Logo and GownRental Text */}
                   {/* ✅ GIF Logo */}
                   <div className="flex justify-center mb-0 bottom-0">

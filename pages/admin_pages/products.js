@@ -33,7 +33,10 @@ export default function ProductsPage() {
     const [isSavingChanges, setIsSavingChanges] = useState(false); 
     const [isCategoryLoading, setIsCategoryLoading] = useState(false);
     const [selectedProductGroup, setSelectedProductGroup] = useState([]);
-    // Add this state near top
+    const hiddenGroupedCount = filteredProducts.filter(p => p.is_hidden).length;
+    const [groupedAllProducts, setGroupedAllProducts] = useState([]); // ✅ Declare first
+    const groupedProductsCount = groupedAllProducts.filter(p => !p.is_hidden).length; // ✅ Use after
+
     const [showCategoryFilters, setShowCategoryFilters] = useState(false);
     const [isExportingCSV, setIsExportingCSV] = useState(false);
     const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -80,7 +83,7 @@ export default function ProductsPage() {
               "Product Name": item.name,
               "Category": item.category,
               "Size": item.sizes,
-              "Price": item.price,
+              "Price": formatCurrency(item.price),
               "Stock": item.stock,
               "Start Date": format(new Date(item.start_date), "dd-MMM-yyyy"),
               "End Date": format(new Date(item.end_date), "dd-MMM-yyyy"),
@@ -110,7 +113,7 @@ export default function ProductsPage() {
         setIsExportingPDF(true);
       
         const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-        const today = format(new Date(), "dd MMM yyyy HH:mm:ss");
+        const today = format(new Date(), "dd-MMM-yyyy HH:mm:ss");
         const totalPagesExp = "{total_pages_count_string}";
         const logoBase64 = process.env.NEXT_PUBLIC_LOGO_BASE64 || "";
       
@@ -169,13 +172,16 @@ export default function ProductsPage() {
         fetchProducts();
     }, []);
 
-    const getCategoryCounts = (products) => {
+    const getCategoryCounts = (groupedProducts) => {
         const counts = {};
-        products.forEach((product) => {
-            counts[product.category] = (counts[product.category] || 0) + 1;
+        groupedProducts.forEach((product) => {
+            if (!product.is_hidden) {
+                counts[product.category] = (counts[product.category] || 0) + 1;
+            }
         });
         return counts;
     };
+    
 
     // Fetch categories when products are loaded
   // Fetch categories when products are loaded
@@ -225,11 +231,15 @@ useEffect(() => {
 
             const totalStock = groupItems.reduce((sum, item) => sum + Number(item.stock), 0);
 
+            const allHidden = groupItems.every((item) => item.is_hidden === 1); // 👈 check if all variants are hidden
+
             grouped.push({
-                ...product,
-                stock: totalStock,
-                groupedItems: groupItems,
+            ...product,
+            stock: totalStock,
+            groupedItems: groupItems,
+            is_hidden: allHidden ? 1 : 0, // ✅ assign group is_hidden based on all items
             });
+
 
             seen.add(key);
         }
@@ -276,11 +286,15 @@ const filterByCategory = (category) => {
 
             const totalStock = groupItems.reduce((sum, item) => sum + Number(item.stock), 0);
 
+            const allHidden = groupItems.every((item) => item.is_hidden === 1); // 👈 check if all variants are hidden
+
             grouped.push({
-                ...product,
-                stock: totalStock,
-                groupedItems: groupItems,
+            ...product,
+            stock: totalStock,
+            groupedItems: groupItems,
+            is_hidden: allHidden ? 1 : 0, // ✅ assign group is_hidden based on all items
             });
+
 
             seen.add(key);
         }
@@ -328,18 +342,23 @@ const filterByCategory = (category) => {
 
                         const totalStock = groupItems.reduce((sum, item) => sum + Number(item.stock), 0);
 
+                        const allHidden = groupItems.every((item) => item.is_hidden === 1); // 👈 check if all variants are hidden
+
                         grouped.push({
-                            ...product,
-                            stock: totalStock,
-                            groupedItems: groupItems,
+                        ...product,
+                        stock: totalStock,
+                        groupedItems: groupItems,
+                        is_hidden: allHidden ? 1 : 0, // ✅ assign group is_hidden based on all items
                         });
+
 
                         seen.add(key);
                     }
                 });
 
-                setProducts(response.data.data);          // full original list
-                setFilteredProducts(grouped);            // 👈 grouped view for All
+                setProducts(response.data.data); // full original list
+                setFilteredProducts(grouped); // for currently selected category
+                setGroupedAllProducts(grouped); // ✅ for total "All" count                
 
             } else {
                 console.error("Invalid API response:", response.data);
@@ -954,18 +973,21 @@ const filterByCategory = (category) => {
                     {showCategoryFilters && (
                         <div className="flex flex-wrap items-center gap-3 mt-4 px-2 py-2 bg-gray-100 shadow-md mx-auto rounded-md">
                             {[
+                              
                                 {
-                                    label: "All",
-                                    icon: <Boxes size={16} />,
-                                    value: null,
-                                    count: filteredProducts.length,
+                                  label: "All",
+                                  icon: <Boxes size={16} />,
+                                  value: null,
+                                  count: groupedAllProducts.filter(p => !p.is_hidden).length, // ✅ always full
                                 },
                                 {
-                                    label: "Hidden",
-                                    icon: <EyeOff size={16} />,
-                                    value: "Hidden Products",
-                                    count: products.filter((p) => p.is_hidden === 1).length,
+                                  label: "Hidden",
+                                  icon: <EyeOff size={16} />,
+                                  value: "Hidden Products",
+                                  count: products.filter((p) => p.is_hidden === 1).length,
                                 },
+                              
+                                                                            
                             ].map(({ label, icon, value, count }) => {
                                 const isActive = selectedCategory === value;
                                 return (
@@ -987,28 +1009,31 @@ const filterByCategory = (category) => {
                             {/* Dynamic Category Buttons */}
                             {categories.map((category) => {
                                 const isActive = selectedCategory === category;
-                                const count = getCategoryCounts(products)[category] || 0;
+
+                                // ✅ Fix: Use groupedAllProducts instead of filteredProducts
+                                const count = getCategoryCounts(groupedAllProducts)[category] || 0;
 
                                 return (
                                     <button
-                                        key={category}
-                                        onClick={() => filterByCategory(category)}
-                                        className={`flex items-center gap-2 text-sm px-4 py-2 rounded-full transition font-medium ${
-                                            isActive
-                                                ? "bg-pink-500 text-white shadow-md"
-                                                : "text-gray-600 hover:bg-gray-200"
-                                        }`}
-                                        disabled={isCategoryLoading}
+                                    key={category}
+                                    onClick={() => filterByCategory(category)}
+                                    className={`flex items-center gap-2 text-sm px-4 py-2 rounded-full transition font-medium ${
+                                        isActive
+                                        ? "bg-pink-500 text-white shadow-md"
+                                        : "text-gray-600 hover:bg-gray-200"
+                                    }`}
+                                    disabled={isCategoryLoading}
                                     >
-                                        {isCategoryLoading && isActive ? (
-                                            <Loader2 size={16} className="animate-spin" />
-                                        ) : (
-                                            <Tag size={16} />
-                                        )}
-                                        <span>{category} ({count})</span>
+                                    {isCategoryLoading && isActive ? (
+                                        <Loader2 size={16} className="animate-spin" />
+                                    ) : (
+                                        <Tag size={16} />
+                                    )}
+                                    <span>{category} ({count})</span>
                                     </button>
                                 );
-                            })}
+                                })}
+
                         </div>
                     )}
                 </div>

@@ -180,70 +180,116 @@ export default function WishlistPage() {
         setFilteredWishlist(result);
     }, [search, wishlist]);
     
-
-    // 📌 Table Columns
     const columns = [
         {
-            name: (
-                <input
-                    type="checkbox"
-                    checked={selectedItems.length === wishlist.length && wishlist.length > 0}
-                    onChange={handleSelectAll}
-                />
-            ),
-            cell: (row) => (
-                <input
-                    type="checkbox"
-                    checked={selectedItems.includes(row.product.id)}
-                    onChange={() => handleCheckboxChange(row.product.id)}
-                />
-            ),
-            center: true,
+          name: (
+            <div className="w-full flex justify-center">
+              <input
+                type="checkbox"
+                checked={selectedItems.length === wishlist.length && wishlist.length > 0}
+                onChange={handleSelectAll}
+              />
+            </div>
+          ),
+          cell: (row) => (
+            <div className="w-full flex justify-center">
+              <input
+                type="checkbox"
+                checked={selectedItems.includes(row.product.id)}
+                onChange={() => handleCheckboxChange(row.product.id)}
+              />
+            </div>
+          ),
+          center: true,
+          width: "200px",
         },
         {
-            name: "Product",
-            selector: row => row.product.name,
-            sortable: true,
-            cell: (row) => (
-                <div className="flex items-center space-x-3">
-                    <Image
-                        src={row.product.image.startsWith("http")
-                            ? row.product.image
-                            : `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/${row.product.image}`}
-                        alt={row.product.name}
-                        width={50}
-                        height={50}
-                        className="rounded-md"
-                    />
-                    <p className="font-semibold text-gray-800">{row.product.name}</p>
-                </div>
-            )
+          name: <span className="w-full text-center font-semibold text-sm">Product Image</span>,
+          cell: (row) => (
+            <div className="flex justify-center w-full">
+              <Image
+                src={
+                  row.product.image.startsWith("http")
+                    ? row.product.image
+                    : `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/${row.product.image}`
+                }
+                alt={row.product.name}
+                width={45}
+                height={45}
+                className="rounded-md"
+              />
+            </div>
+          ),
+          center: true,
+          width: "200px",
         },
         {
-            name: "Price",
-            selector: row => `₱${(parseFloat(row.product.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            sortable: true,
-            center: true
+          name: <span className="w-full text-center font-semibold text-sm">Product Name</span>,
+          selector: (row) => row.product.name,
+          sortable: true,
+          center: true,
+          width: "300px",
+          cell: (row) => (
+            <p className="text-sm text-center text-gray-800 font-medium w-full">{row.product.name}</p>
+          ),
         },
         {
-            name: "Remove",
-            center: true,
-            cell: (row) => (
-                <button onClick={() => removeFromWishlist(row.product.id)} disabled={deletingItemId === row.product.id}>
-                {deletingItemId === row.product.id ? (
-                    <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                    </svg>
-                ) : (
-                    <FaTrash className="text-gray-600 hover:text-red-600 cursor-pointer" />
-                )}
+          name: <span className="w-full text-center font-semibold text-sm">Price</span>,
+          selector: (row) =>
+            `₱${(parseFloat(row.product.price) || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+          center: true,
+          width: "300px",
+          cell: (row) => (
+            <p className="text-sm text-center w-full">
+              ₱{(parseFloat(row.product.price) || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          ),
+        },
+        {
+          name: <span className="w-full text-center font-semibold text-sm">Remove</span>,
+          center: true,
+          width: "400px",
+          cell: (row) => (
+            <button
+              onClick={() => removeFromWishlist(row.product.id)}
+              disabled={deletingItemId === row.product.id}
+              className="flex justify-center w-full"
+            >
+              {deletingItemId === row.product.id ? (
+                <svg
+                  className="animate-spin h-5 w-5 text-gray-600"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8H4z"
+                  ></path>
+                </svg>
+              ) : (
+                <FaTrash className="text-gray-600 hover:text-red-600 cursor-pointer" />
+              )}
             </button>
-            
-            )
-        }
-        
-    ];
+          ),
+        },
+      ];
+      
 
     return (
         <AuthGuard>

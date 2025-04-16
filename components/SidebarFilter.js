@@ -1,6 +1,6 @@
 // components/SidebarFilter.js
 "use client";
-
+import { useState } from "react";
 import { PartyPopper } from "lucide-react";
 
 export default function SidebarFilter({
@@ -19,6 +19,7 @@ export default function SidebarFilter({
 
   // Create a sorted copy of categories
   const sortedCategories = [...categories].sort((a, b) => a.localeCompare(b));
+  const [showAllDiscounts, setShowAllDiscounts] = useState(false);
 
   return (
     <aside className="w-full md:w-1/4 bg-white p-6 rounded-lg shadow-md">
@@ -102,34 +103,46 @@ export default function SidebarFilter({
         </h3>
 
         {Object.keys(discountGroups).length > 0 ? (
-          Object.keys(discountGroups)
-            .sort((a, b) => Number(b) - Number(a))
-            .map((discount, idx) => (
-              <div
-                key={idx}
-                className="relative bg-pink-200 text-pink-800 shadow-sm p-5 my-4 overflow-hidden"
-              >
-                <div className="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-md z-10" />
-                <div className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-md z-10" />
+          <>
+            {Object.keys(discountGroups)
+              .sort((a, b) => Number(b) - Number(a))
+              .slice(0, showAllDiscounts ? undefined : 7) // Only show 7 if collapsed
+              .map((discount, idx) => (
+                <div
+                  key={idx}
+                  className="relative bg-pink-200 text-pink-800 shadow-sm p-5 my-4 overflow-hidden rounded-xl"
+                >
+                  <div className="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-md z-2" />
+                  <div className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-md z-2" />
 
-                <div className="flex items-center justify-center mb-2">
-                  <PartyPopper className="w-6 h-6 mr-2 text-pink-800" />
-                  <span className="text-lg font-bold">{discount}% OFF</span>
+                  <div className="flex items-center justify-center mb-2">
+                    <PartyPopper className="w-6 h-6 mr-2 text-pink-800" />
+                    <span className="text-lg font-bold">{discount}% OFF</span>
+                  </div>
+
+                  <div className="text-xs text-black font-semibold text-center">Product/s:</div>
+                  <ul className="flex flex-wrap justify-center gap-1 mt-1 text-xs">
+                    {discountGroups[discount].map((product) => (
+                      <li
+                        key={product.id}
+                        className="bg-pink-600 text-white font-semibold px-2 py-0.5 rounded-full"
+                      >
+                        {product.name}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              ))}
 
-                <div className="text-xs text-black font-semibold text-center">Product/s:</div>
-                <ul className="flex flex-wrap justify-center gap-1 mt-1 text-xs">
-                  {discountGroups[discount].map((product) => (
-                    <li
-                      key={product.id}
-                      className="bg-pink-600 text-white font-semibold px-2 py-0.5 rounded-full"
-                    >
-                      {product.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
+            {Object.keys(discountGroups).length > 7 && (
+              <button
+                onClick={() => setShowAllDiscounts(!showAllDiscounts)}
+                className="text-sm text-pink-600 font-medium hover:underline mx-auto block text-center"
+              >
+                {showAllDiscounts ? "See less..." : "See more..."}
+              </button>
+            )}
+          </>
         ) : (
           <p className="text-gray-500 text-sm">No promotions available.</p>
         )}

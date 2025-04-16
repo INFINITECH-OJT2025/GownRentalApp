@@ -255,7 +255,7 @@ const handleImageChange = (e) => {
 
                         <div className="flex flex-col lg:flex-row gap-10">
                             {/* Left: Profile Image Upload */}
-                            <div className="flex flex-col items-center w-full lg:w-1/3 border-r border-gray-300 pr-6">
+                            <div className="flex flex-col items-center w-full lg:w-1/3 lg:border-r lg:border-gray-300 lg:pr-6">
                         <h2 className="text-3xl font-bold text-gray-900">Admin Profile</h2>
 
                         {/* Apply margin-top here */}
@@ -330,7 +330,15 @@ const handleImageChange = (e) => {
                             className="mb-4 rounded-lg shadow"
                         />
                         )}
-                        <input type="file" accept="image/*" onChange={handleQRCodeChange} className="w-[220px] p-2.5 border rounded-lg bg-gray-50" />
+                 <div className="w-[50px]">
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleQRCodeChange}
+                    className="w-full p-2 border rounded-lg bg-gray-50 text-sm"
+                />
+                </div>
+
                     </div>
 
                     {/* ✅ Right-aligned Save Button */}

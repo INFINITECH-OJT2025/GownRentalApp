@@ -96,7 +96,7 @@ const filteredTableData = stats?.bookingsList?.filter((b) => {
         toast.promise(
           new Promise((resolve) => {
             const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-            const currentDate = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+            const currentDate = format(new Date(), "dd-MMM-yyyy HH:mm:ss");
             const logoBase64 = process.env.NEXT_PUBLIC_LOGO_BASE64 || "";
             const totalPagesExp = "{total_pages_count_string}";
     
@@ -292,7 +292,7 @@ const filteredTableData = stats?.bookingsList?.filter((b) => {
                   </div>
 
                   {/* Export Buttons */}
-                  <div className="flex gap-4">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
                   <button
                   onClick={exportBarChartToCSV}
                   disabled={isExportingCSV}

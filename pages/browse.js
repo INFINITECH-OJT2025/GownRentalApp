@@ -98,17 +98,6 @@ export default function BrowsePage() {
         return priceB - priceA;
       });
 
-      const bestSellerRankMap =
-      sortByDate === "best-seller"
-        ? sortedProducts
-            .filter(product => product.returned_count > 0) // ✅ Only consider products with returned bookings
-            .sort((a, b) => b.returned_count - a.returned_count)
-            .reduce((acc, product, i) => {
-              acc[product.id] = i + 1; // ✅ Assign dynamic Top N
-              return acc;
-            }, {})
-        : {};
-    
     
     useEffect(() => {
         const fetchFavorites = async () => {
@@ -265,42 +254,58 @@ export default function BrowsePage() {
          };
          
          const filteredProducts = sortedProducts
-           .filter((product) => {
-             if (sortByDate === "best-seller") {
-               return product.returned_count > 0;
-             }
-             if (sortByDate === "best-deals") {
-               return product.discounted_price && Number(product.discounted_price) < Number(product.price);
-             }
-             if (sortByDate === "new-arrivals") {
-               return isNewArrival(product.created_at);
-             }
-             return true;
-           })
-       .filter((product) =>
-           (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
-           product.price <= priceRange &&
-           (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-           product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-           product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+         .filter((product) => {
+           if (sortByDate === "best-seller") {
+             return product.returned_count > 0;
+           }
+           if (sortByDate === "best-deals") {
+             return product.discounted_price && Number(product.discounted_price) < Number(product.price);
+           }
+           if (sortByDate === "new-arrivals") {
+             return isNewArrival(product.created_at);
+           }
+           return true;
+         })
+     .filter((product) =>
+         (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
+         product.price <= priceRange &&
+         (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+     );
+
+     const bestSellerRankMap =
+     sortByDate === "best-seller"
+       ? filteredProducts
+           .filter(product => product.returned_count > 0)
+           .sort((a, b) => b.returned_count - a.returned_count)
+           .reduce((acc, product, i) => {
+             acc[product.id] = i + 1; // Global Top N
+             return acc;
+           }, {})
+       : {};
+   
+       
+       const inStockItemsPerPage = 6;
+       const outOfStockItemsPerPage = 3;
+       
+ 
+     // STEP 2: Separate into in-stock and out-of-stock groups
+     const inStockProducts = filteredProducts.filter(p => p.totalStock > 0);
+     const outOfStockProducts = filteredProducts.filter(p => p.totalStock <= 0);
+ 
+     // STEP 3: Paginate the filtered in-stock and out-of-stock products
+     const paginatedProducts = inStockProducts.slice(
+         (currentPage - 1) * inStockItemsPerPage,
+         currentPage * inStockItemsPerPage
        );
-   
+       const outOfStockPaginated = outOfStockProducts.slice(
+         (currentOutOfStockPage - 1) * outOfStockItemsPerPage,
+         currentOutOfStockPage * outOfStockItemsPerPage
+       );
        
-         const itemsPerPage = 6;
-   
-       const startIndex = (currentPage - 1) * itemsPerPage;
-   
-       // STEP 2: Separate into in-stock and out-of-stock groups
-       const inStockProducts = filteredProducts.filter(p => p.totalStock > 0);
-       const outOfStockProducts = filteredProducts.filter(p => p.totalStock <= 0);
-   
-       // STEP 3: Paginate the filtered in-stock and out-of-stock products
-       const paginatedProducts = inStockProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-       const outOfStockPaginated = outOfStockProducts.slice((currentOutOfStockPage - 1) * itemsPerPage, currentOutOfStockPage * itemsPerPage);
-   
-       
-       const totalPages = Math.ceil(inStockProducts.length / itemsPerPage);
-       const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / itemsPerPage);
+       const totalPages = Math.ceil(inStockProducts.length / inStockItemsPerPage);
+       const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / outOfStockItemsPerPage);
        
        useEffect(() => {
            setCurrentPage(1);
@@ -320,11 +325,11 @@ export default function BrowsePage() {
 
         <div className="relative w-full pt-20 md:pt-16"> {/* ✅ Adds top padding instead of broken mt-15 */}
             {/* ✅ Banner Image */}
-            <div className="w-full overflow-hidden h-[140px] sm:h-[180px] md:h-[220px]">
+            <div className="hidden sm:block w-full overflow-hidden h-[180px] md:h-[220px]">
             <img 
                 src="/images/gownrental.svg" 
                 alt="Gown Rental Banner" 
-                className="w-[600px] sm:w-full h-full object-cover object-center mx-auto"
+                className="w-full h-full object-cover object-center"
             />
             </div>
 
@@ -332,31 +337,32 @@ export default function BrowsePage() {
             <section className="relative bg-[url('/gown-hero.jpg')] bg-cover bg-center bg-no-repeat min-h-[60vh] flex items-center">
             <div className="container mx-auto px-6 text-center md:text-left pt-5">
                 
-                <div className="mt-6 flex flex-wrap justify-center md:justify-start">
-                <Link href="/browse">
-                <button 
-                    onClick={() => setLoadingButton("browse")}
-                    disabled={loadingButton === "browse"}
-                    className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                        ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                    {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
-                </button>
+            <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-3">
+
+
+            <Link href="/browse">
+            <button
+                onClick={() => setLoadingButton("browse")}
+                disabled={loadingButton === "browse"}
+                className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+                {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
+            </button>
             </Link>
 
-            <Link href="/about">
-                <button 
-                    onClick={() => setLoadingButton("learn")}
-                    disabled={loadingButton === "learn"}
-                    className={`ml-4 border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                        ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                    {loadingButton === "learn" ? "Loading..." : "Learn More"}
-                </button>
+            <Link href="/about_new">
+            <button
+                onClick={() => setLoadingButton("learn")}
+                disabled={loadingButton === "learn"}
+                className={`border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+                {loadingButton === "learn" ? "Loading..." : "Learn More"}
+            </button>
             </Link>
 
-
-                </div>
+            </div>
             </div>
         </section>
 
@@ -377,7 +383,7 @@ export default function BrowsePage() {
             bannerColors={bannerColors}
             showNewArrivalsOnly={showNewArrivalsOnly}
             setShowNewArrivalsOnly={setShowNewArrivalsOnly}
-            />                          
+            />                         
           
 
                     {/* Product Section */}
@@ -442,6 +448,7 @@ export default function BrowsePage() {
                     totalPages={outOfStockTotalPages}
                     setCurrentPage={setCurrentOutOfStockPage}
                     sortByDate={sortByDate} 
+                    bestSellerRankMap={bestSellerRankMap}
                     />
 
                 </div>

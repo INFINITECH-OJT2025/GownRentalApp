@@ -548,16 +548,16 @@ const finalProductId = matchedSize?.product_id || product.id; // Fallback in cas
               <h1 className="text-4xl font-bold">{product.name}</h1>
 
               {product.discounted_price && product.discounted_price !== null ? (
-              <div className="flex items-center space-x-3">
-                <p className="text-3xl font-bold text-pink-600">
-                  ₱{Number(product.discounted_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </p>
-                <p className="text-xl font-semibold text-red-500 line-through">
-                  ₱{Number(product.price).toLocaleString()}
-                </p>
-                <p className="text-xl font-medium text-green-600">
-                  ({Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF)
-                </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:space-x-3 sm:flex-nowrap">
+            <p className="text-2xl sm:text-3xl font-bold text-pink-600">
+              ₱{Number(product.discounted_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-lg sm:text-xl font-semibold text-red-500 line-through">
+              ₱{Number(product.price).toLocaleString()}
+            </p>
+            <p className="text-sm sm:text-xl font-medium text-green-600">
+              ({Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF)
+            </p>
               </div>
             ) : (
               <p className="text-3xl font-bold text-pink-600">
@@ -791,9 +791,10 @@ const finalProductId = matchedSize?.product_id || product.id; // Fallback in cas
         <div className="w-full flex flex-col items-center justify-center my-16">
         <div className="relative w-full max-w-xl mb-6">
         <div className="h-px bg-gradient-to-r from-pink-300 via-pink-500 to-pink-300" />
-        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-white px-6 py-1 text-pink-600 font-semibold text-lg rounded-full shadow-md border border-pink-300">
-          ✨ Customer Reviews ✨
-        </div>
+        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-white px-6 py-1 text-pink-600 font-semibold text-lg rounded-full shadow-md border border-pink-300 whitespace-nowrap text-center">
+        ✨ Customer Reviews ✨
+      </div>
+
       </div>
 
       <section id="review" ref={reviewRef} className="w-full flex justify-center my-16 px-4">

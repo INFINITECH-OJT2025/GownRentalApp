@@ -89,10 +89,10 @@ export default function OrdersPage() {
             if (visibleFields.includes("sizes")) row["Size"] = order.sizes;
             if (visibleFields.includes("start_date")) row["Start Date"] = format(new Date(order.start_date), "dd-MMM-yyyy");
             if (visibleFields.includes("end_date")) row["End Date"] = format(new Date(order.end_date), "dd-MMM-yyyy");
-            if (visibleFields.includes("total_price")) row["Total Price"] = Number(order.total_price).toLocaleString();
-            if (visibleFields.includes("discounted_price")) row["Discounted Price"] = Number(order.discounted_price || 0).toLocaleString();
-            if (visibleFields.includes("voucher_fee")) row["Voucher Fee"] = Number(order.voucher_fee || 0).toLocaleString();
-            if (visibleFields.includes("added_price")) row["Added Price"] = Number(order.added_price || 0).toLocaleString();
+            if (visibleFields.includes("total_price")) row["Total Price"] = `₱${Number(order.total_price).toLocaleString()}`;
+            if (visibleFields.includes("discounted_price")) row["Discounted Price"] = `₱${Number(order.discounted_price || 0).toLocaleString()}`;
+            if (visibleFields.includes("voucher_fee")) row["Voucher Fee"] = `₱${Number(order.voucher_fee || 0).toLocaleString()}`;
+            if (visibleFields.includes("added_price")) row["Added Price"] = `₱${Number(order.added_price || 0).toLocaleString()}`;            
             if (visibleFields.includes("created_at")) row["Date"] = format(new Date(order.created_at), "dd-MMM-yyyy");
             if (visibleFields.includes("status")) row["Status"] = order.status;
             return row;
@@ -103,7 +103,7 @@ export default function OrdersPage() {
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
-          link.setAttribute("download", `Orders_${format(new Date(), "yyyy-MM-dd")}.csv`);
+          link.setAttribute("download", `Orders_${format(new Date(), "dd-MMM-yyyy")}.csv`);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -378,10 +378,10 @@ export default function OrdersPage() {
         { name: "Selected Size", selector: (row) => row.sizes || "N/A", sortable: true, width: "150px", key: "sizes" },
         { name: "Start Date", selector: (row) => formatDate(row.start_date), sortable: true, key: "start_date" },
         { name: "End Date", selector: (row) => formatDate(row.end_date), sortable: true, key: "end_date" },
-        { name: "Total Price", selector: (row) => `₱${row.total_price}`, sortable: true, key: "total_price" },
-        { name: "Discounted / Price", selector: (row) => `₱${row.discounted_price || "0.00"}`, sortable: true, width: "150px", key: "discounted_price" },
-        { name: "Voucher Fee", selector: (row) => `₱${row.voucher_fee || "0.00"}`, sortable: true, width: "150px", key: "voucher_fee" },
-        { name: "Added Price", selector: (row) => `₱${row.added_price || "0.00"}`, sortable: true, width: "150px", key: "added_price" },
+        { name: "Total Price", selector: (row) => `₱${Number(row.total_price).toLocaleString()}`, sortable: true, key: "total_price" },
+        { name: "Discounted / Price", selector: (row) => `₱${Number(row.discounted_price || 0).toLocaleString()}`, sortable: true, width: "150px", key: "discounted_price" },
+        { name: "Voucher Fee", selector: (row) => `₱${Number(row.voucher_fee || 0).toLocaleString()}`, sortable: true, width: "150px", key: "voucher_fee" },
+        { name: "Added Price", selector: (row) => `₱${Number(row.added_price || 0).toLocaleString()}`, sortable: true, width: "150px", key: "added_price" },
         { name: "Booked Date", selector: (row) => formatDate(row.created_at), sortable: true, key: "created_at" },
         {
           name: "GCash Receipt",

@@ -89,17 +89,7 @@ export default function LandingPage() {
            return priceB - priceA;
          });
    
-         const bestSellerRankMap =
-         sortByDate === "best-seller"
-           ? sortedProducts
-               .filter(product => product.returned_count > 0) // ✅ Only consider products with returned bookings
-               .sort((a, b) => b.returned_count - a.returned_count)
-               .reduce((acc, product, i) => {
-                 acc[product.id] = i + 1; // ✅ Assign dynamic Top N
-                 return acc;
-               }, {})
-           : {};
-       
+
        
        useEffect(() => {
            const fetchProducts = async () => {
@@ -214,42 +204,57 @@ export default function LandingPage() {
              };
              
              const filteredProducts = sortedProducts
-               .filter((product) => {
-                 if (sortByDate === "best-seller") {
-                   return product.returned_count > 0;
-                 }
-                 if (sortByDate === "best-deals") {
-                   return product.discounted_price && Number(product.discounted_price) < Number(product.price);
-                 }
-                 if (sortByDate === "new-arrivals") {
-                   return isNewArrival(product.created_at);
-                 }
-                 return true;
-               })
-           .filter((product) =>
-               (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
-               product.price <= priceRange &&
-               (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-               product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-               product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+             .filter((product) => {
+               if (sortByDate === "best-seller") {
+                 return product.returned_count > 0;
+               }
+               if (sortByDate === "best-deals") {
+                 return product.discounted_price && Number(product.discounted_price) < Number(product.price);
+               }
+               if (sortByDate === "new-arrivals") {
+                 return isNewArrival(product.created_at);
+               }
+               return true;
+             })
+         .filter((product) =>
+             (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
+             product.price <= priceRange &&
+             (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+             product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+             product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+         );
+         const bestSellerRankMap =
+         sortByDate === "best-seller"
+           ? filteredProducts
+               .filter(product => product.returned_count > 0)
+               .sort((a, b) => b.returned_count - a.returned_count)
+               .reduce((acc, product, i) => {
+                 acc[product.id] = i + 1; // Global Top N
+                 return acc;
+               }, {})
+           : {};
+       
+           
+           const inStockItemsPerPage = 6;
+           const outOfStockItemsPerPage = 3;
+          
+     
+         // STEP 2: Separate into in-stock and out-of-stock groups
+         const inStockProducts = filteredProducts.filter(p => p.totalStock > 0);
+         const outOfStockProducts = filteredProducts.filter(p => p.totalStock <= 0);
+     
+         // STEP 3: Paginate the filtered in-stock and out-of-stock products
+         const paginatedProducts = inStockProducts.slice(
+             (currentPage - 1) * inStockItemsPerPage,
+             currentPage * inStockItemsPerPage
            );
-       
+           const outOfStockPaginated = outOfStockProducts.slice(
+             (currentOutOfStockPage - 1) * outOfStockItemsPerPage,
+             currentOutOfStockPage * outOfStockItemsPerPage
+           );
            
-             const itemsPerPage = 6;
-       
-           const startIndex = (currentPage - 1) * itemsPerPage;
-       
-           // STEP 2: Separate into in-stock and out-of-stock groups
-           const inStockProducts = filteredProducts.filter(p => p.totalStock > 0);
-           const outOfStockProducts = filteredProducts.filter(p => p.totalStock <= 0);
-       
-           // STEP 3: Paginate the filtered in-stock and out-of-stock products
-           const paginatedProducts = inStockProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-           const outOfStockPaginated = outOfStockProducts.slice((currentOutOfStockPage - 1) * itemsPerPage, currentOutOfStockPage * itemsPerPage);
-       
-           
-           const totalPages = Math.ceil(inStockProducts.length / itemsPerPage);
-           const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / itemsPerPage);
+           const totalPages = Math.ceil(inStockProducts.length / inStockItemsPerPage);
+           const outOfStockTotalPages = Math.ceil(outOfStockProducts.length / outOfStockItemsPerPage);
            
            useEffect(() => {
                setCurrentPage(1);
@@ -269,14 +274,17 @@ export default function LandingPage() {
             <GuestNavbar />
       
             {/* Hero Section */}
-            <section className="bg-gray-100 pt-5 pb-12 mt-20">
-            <div className="px-30 md:px-5">
-                <div className="bg-white rounded-3xl overflow-hidden shadow-lg w-full max-w-[1600px] mx-auto h-[50px] md:h-[50px]">
-                <img
-                    src="/images/ael-amari.svg"
-                    alt="Gown Rental Hero"
-                    className="w-full h-full object-cover"
-                />
+            <section className="bg-gray-100 pt-3 md:pt-5 pb-10 md:pb-12 mt-20 md:mt-20">
+            <div className="px-3 md:px-10">
+          <div className="bg-white rounded-none md:rounded-3xl overflow-hidden shadow-lg w-full max-w-[1600px] mx-auto h-[50px] md:h-auto">
+
+          <img
+          src="/images/ael-amari.svg"
+          alt="Gown Rental Hero"
+          className="w-full h-full md:h-auto md:max-h-[300px] object-contain"
+        />
+
+
                 </div>
             </div>
             </section>
@@ -290,28 +298,31 @@ export default function LandingPage() {
                 <p className="mt-4 text-lg md:text-xl text-gray-800 drop-shadow-md">
                   Elegant styles, premium fabrics, and hassle-free gown rentals.
                 </p>
-                <div className="mt-6 flex flex-wrap justify-center md:justify-start">
-                  <Link href="/browse">
-                    <button 
-                      onClick={() => setLoadingButton("browse")}
-                      disabled={loadingButton === "browse"}
-                      className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                        ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
-                    </button>
-                  </Link>
-      
-                  <Link href="/about_new">
-                    <button 
-                      onClick={() => setLoadingButton("learn")}
-                      disabled={loadingButton === "learn"}
-                      className={`ml-4 border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
-                        ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      {loadingButton === "learn" ? "Loading..." : "Learn More"}
-                    </button>
-                  </Link>
+                <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-3">
+
+
+                <Link href="/browse">
+                  <button
+                    onClick={() => setLoadingButton("browse")}
+                    disabled={loadingButton === "browse"}
+                    className={`bg-pink-600 hover:bg-pink-700 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                      ${loadingButton === "browse" ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {loadingButton === "browse" ? "Loading..." : "Browse Gowns"}
+                  </button>
+                </Link>
+
+                <Link href="/about_new">
+                  <button
+                    onClick={() => setLoadingButton("learn")}
+                    disabled={loadingButton === "learn"}
+                    className={`border-2 border-pink-600 text-pink-600 hover:bg-white hover:text-pink-600 text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition
+                      ${loadingButton === "learn" ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {loadingButton === "learn" ? "Loading..." : "Learn More"}
+                  </button>
+                </Link>
+
                 </div>
               </div>
             </section>
@@ -387,6 +398,7 @@ export default function LandingPage() {
                 totalPages={outOfStockTotalPages}
                 setCurrentPage={setCurrentOutOfStockPage}
                 sortByDate={sortByDate} 
+                bestSellerRankMap={bestSellerRankMap}
                 />
                 
                 

@@ -26,6 +26,7 @@ export default function PromotionalPage() {
     const [isExportingCSV, setIsExportingCSV] = useState(false);
     const [isExportingPDF, setIsExportingPDF] = useState(false);
     
+    const [showAllDiscounts, setShowAllDiscounts] = useState(false);
 
 
     useEffect(() => {
@@ -235,11 +236,20 @@ export default function PromotionalPage() {
       
     
 
-    const handleEdit = (product) => {
+      const handleEdit = (product) => {
         setSelectedProduct(product);
-        setDiscountPercentage("");
+    
+        // Calculate existing discount % if available
+        if (product.discounted_price && product.price) {
+            const discount = Math.round(((product.price - product.discounted_price) / product.price) * 100);
+            setDiscountPercentage(discount.toString());
+        } else {
+            setDiscountPercentage(""); // No discount
+        }
+    
         setIsEditModalOpen(true);
     };
+    
 
     const handleSaveDiscount = async () => {
         if (!selectedProduct) return;
@@ -378,41 +388,53 @@ export default function PromotionalPage() {
                 <main className="p-6 mt-16">
                     <h1 className="text-3xl font-bold text-gray-800 mb-6">Promotions</h1>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {Object.keys(discountGroups).map((discount, idx) => (
-                    <div
-                    key={idx}
-                    className="relative bg-pink-100 text-pink-800 shadow-md p-6 my-2 rounded-none overflow-hidden"
-                    >
-                    {/* 🎟️ Left and Right "cut-out" */}
-                    <div className="absolute -left-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full z-10 shadow-sm"></div>
-                    <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full z-10 shadow-sm"></div>
-
-                    {/* 🎉 Discount Title with Icon */}
-                    <div className="flex items-center justify-center mb-3 text-center">
-                        <PartyPopper className="w-8 h-8 text-pink-500 mr-2" />
-                        <span className="text-2xl font-bold">{discount}% OFF</span>
-                    </div>
-
-                    {/* 🏷️ Label */}
-                    <div className="text-sm font-semibold text-gray-700 mb-2 text-center">
-                        Product/s:
-                    </div>
-
-                    {/* 💊 Product Tags */}
-                    <div className="flex flex-wrap justify-center gap-2 text-xs">
-                        {discountGroups[discount].map((product) => (
-                        <span
-                            key={product.id}
-                            className="bg-pink-600 text-white px-3 py-1 rounded-full"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                    {Object.keys(discountGroups)
+                        .sort((a, b) => parseInt(b) - parseInt(a)) // Optional: highest discount first
+                        .slice(0, showAllDiscounts ? Object.keys(discountGroups).length : 6)
+                        .map((discount, idx) => (
+                        <div
+                            key={idx}
+                            className="relative bg-pink-100 text-pink-800 shadow-md p-6 my-2 rounded-none overflow-hidden"
                         >
-                            {product.name}
-                        </span>
-                        ))}
+                            <div className="absolute -left-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full z-10 shadow-sm"></div>
+                            <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full z-10 shadow-sm"></div>
+
+                            <div className="flex items-center justify-center mb-3 text-center">
+                            <PartyPopper className="w-8 h-8 text-pink-500 mr-2" />
+                            <span className="text-2xl font-bold">{discount}% OFF</span>
+                            </div>
+
+                            <div className="text-sm font-semibold text-gray-700 mb-2 text-center">
+                            Product/s:
+                            </div>
+
+                            <div className="flex flex-wrap justify-center gap-2 text-xs">
+                            {discountGroups[discount].map((product) => (
+                                <span
+                                key={product.id}
+                                className="bg-pink-600 text-white px-3 py-1 rounded-full"
+                                >
+                                {product.name}
+                                </span>
+                            ))}
+                            </div>
+                        </div>
+                    ))}
                     </div>
-                    </div>
-                ))}
+
+                    {Object.keys(discountGroups).length > 6 && (
+                <div className="text-center mb-6">
+                    <button
+                    onClick={() => setShowAllDiscounts(!showAllDiscounts)}
+                    className="text-sm text-pink-600 hover:underline focus:outline-none"
+                    >
+                    {showAllDiscounts ? "See less" : "See More..."}
+                    </button>
                 </div>
+                )}
+
+
                 <div className="bg-gray-100 p-6 rounded-lg shadow-md mb-6">
                 {/* 🔧 Top row layout: Filter + Export on left, Search on right */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
@@ -520,6 +542,13 @@ export default function PromotionalPage() {
             <h2 className="text-xl font-semibold text-gray-800 mb-3">Edit Discount</h2>
 
             <p className="text-gray-700">Product: {selectedProduct.name}</p>
+            <p className="text-gray-700">
+            Current Discount:{" "}
+            {selectedProduct.discounted_price && selectedProduct.discounted_price !== "null"
+                ? `${discountPercentage}%`
+                : "No Discount"}
+        </p>
+
             <p>Original Price: ₱{selectedProduct.price.toLocaleString()}</p>
 
             {/* ✅ Input for Discount */}

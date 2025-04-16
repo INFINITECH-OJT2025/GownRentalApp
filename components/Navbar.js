@@ -12,7 +12,7 @@ import { useBook } from "../context/BookContext";
 import moment from "moment";
 import Cookies from "js-cookie";
 import { getCurrentUser } from "../utils/api";
-
+import { useUser } from "../context/UserContext";
 
 export default function Navbar() {
     const pathname = usePathname();
@@ -25,8 +25,13 @@ export default function Navbar() {
 
     const [loadingLink, setLoadingLink] = useState(null);
     const [loadingLogout, setLoadingLogout] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-    const [user, setUser] = useState(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    
+    // const [user, setUser] = useState(null);
+    // const [userRole, setUserRole] = useState(null);
+
+    const { user, setUser, userRole, setUserRole, version } = useUser();
 
     const [chatHasNotification, setChatHasNotification] = useState(false);
 
@@ -44,31 +49,17 @@ export default function Navbar() {
         localStorage.setItem("wishlistUpdated", Date.now());
     };
 
-  
-    const [userRole, setUserRole] = useState(null);
-
-    useEffect(() => {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setUserRole(parsedUser?.role || null);
-        }
-      }, []);      
-      
 
     useEffect(() => {
         const handleClickOutside = (e) => {
           if (!e.target.closest(".profile-dropdown")) {
-            setIsOpen(false);
+            setIsProfileDropdownOpen(false);
           }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
       }, []);
       
-    
-
     useEffect(() => {
         updateBookingCount(); // Initial fetch
     
@@ -90,7 +81,8 @@ export default function Navbar() {
         };
     }, [updateBookingCount]);
     
-    
+ 
+      
     const handleLogout = async () => {
         setLoadingLogout(true);
     
@@ -224,32 +216,42 @@ export default function Navbar() {
                         </button>
 
                        {/* NEW - Desktop Profile Dropdown */}
-                    {userRole && (
-                    <div className="relative profile-dropdown">
+                       {userRole && (
+                        <div className="relative profile-dropdown hidden md:block">
                         <button
-                        onClick={() => setIsOpen(!isOpen)}
-                        className="focus:outline-none flex items-center"
+                        onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                        className={`focus:outline-none flex items-center rounded-full p-1 border-2 ${
+                            isProfileDropdownOpen ? "bg-pink-100 border-pink-600" : "border-transparent"
+                        }`}
                         >
-                        <img
-                            src={user?.image || "/images/default-profile.svg"}
-                            alt="User Profile"
-                            className="w-10 h-10 rounded-full border-2 border-pink-600 object-cover"
+
+
+                    <img
+                        key={`${user?.image}-${version}`} // ✅ ensures re-render on update
+                        src={user?.image || "/images/default-profile.svg"
+                        }
+                        alt="User Profile"
+                        className="w-10 h-10 rounded-full border-2 border-pink-600 object-cover"
                         />
+
                         </button>
 
-                        {isOpen && (
+                        {isProfileDropdownOpen && (
                      <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg border z-50 py-2 transition-all duration-200 ease-in-out">
                      <div className="px-4 py-2 border-b">
                        <p className="font-medium text-sm">{user?.name || "My Account"}</p>
                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                      </div>
                      <button
-                       onClick={() => handleNavigation("/profile")}
-                       disabled={loadingLink === "/profile"}
-                       className="w-full text-left px-4 py-2 hover:bg-pink-100 text-gray-700 text-sm disabled:opacity-50"
-                     >
-                       {loadingLink === "/profile" ? "Loading..." : "My Profile"}
-                     </button>
+                    onClick={() => handleNavigation("/profile")}
+                    disabled={loadingLink === "/profile"}
+                    className={`w-full text-left px-4 py-2 text-gray-700 text-sm disabled:opacity-50 ${
+                        pathname === "/profile" ? "bg-pink-100 font-semibold" : "hover:bg-pink-100"
+                    }`}
+                    >
+                    {loadingLink === "/profile" ? "Loading..." : "My Profile"}
+                    </button>
+
                      <button
                        onClick={handleLogout}
                        className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-100 text-sm disabled:opacity-50"
@@ -270,14 +272,15 @@ export default function Navbar() {
                 </div>
 
                 {/* Mobile Menu Button */}
-                <button className="md:hidden text-gray-700 focus:outline-none" onClick={() => setIsOpen(!isOpen)}>
+                <button className="md:hidden text-gray-700 focus:outline-none" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
                     ☰
                 </button>
             </div>
 
                 {/* Mobile Dropdown Menu */}
-            {isOpen && (
-                <div className="md:hidden flex flex-col bg-white shadow-md p-4 space-y-3">
+                {isMobileMenuOpen && (
+                <div className="md:hidden fixed top-[64px] left-0 w-full bg-white shadow-md p-4 space-y-3 z-50">
+
                     <button
                         onClick={() => handleNavigation("/")}
                         className={`relative w-full ${

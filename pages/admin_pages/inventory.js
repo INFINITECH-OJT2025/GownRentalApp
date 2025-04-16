@@ -66,12 +66,11 @@ export default function InventoryPage() {
       
         const csvData = rows.map((item) => ({
           "Product Name": item.name,
-          "Price": `₱${item.price}`,
+          "Price": `"₱${Number(item.price).toLocaleString()}"`,
           "Category": item.category,
           "Size": item.sizes,
           "Stock": item.stock,
           "Status": item.stock > 0 ? "Available" : "Out of Stock",
-          "Created At": new Date(item.created_at).toLocaleDateString("en-GB"),
         }));
       
         const csvContent = [
@@ -105,15 +104,11 @@ export default function InventoryPage() {
         setIsExportingPDF(true);
       
         const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-        const today = new Date().toLocaleString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-      
+        const now = new Date();
+        const dateStr = `${now.getDate().toString().padStart(2, "0")}-${now.toLocaleString("en-GB", { month: "short" })}-${now.getFullYear()}`;
+        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
+        const today = `${dateStr} ${timeStr}`;
+        
         const totalPagesExp = "{total_pages_count_string}";
         const logoBase64 = process.env.NEXT_PUBLIC_LOGO_BASE64 || "";
       
@@ -330,7 +325,7 @@ export default function InventoryPage() {
     // ✅ Inventory Table Columns with Dynamic Background Colors
 const inventoryColumns = [
     { name: "Product Name", selector: (row) => row.name, sortable: true },
-    { name: "Price", selector: (row) => `₱${row.price}`, sortable: true },
+    { name: "Price", selector: (row) => `₱${Number(row.price).toLocaleString()}`, sortable: true },
     { name: "Category", selector: (row) => row.category, sortable: true },
     { name: "Size", selector: (row) => row.sizes, sortable: true },
     { name: "Stock", selector: (row) => row.stock, sortable: true },
@@ -370,7 +365,7 @@ const inventoryColumns = [
 const stockLogsColumns = [
     { name: "Product Name", selector: (row) => row.product_name, sortable: true },
     { name: "Product Size", selector: (row) => row.sizes, sortable: true },
-    { name: "Stock Added", selector: (row) => row.stock_added, sortable: true },
+    { name: "Stock Change", selector: (row) => row.stock_added, sortable: true },
     { 
         name: "Remarks", 
         selector: (row) => row.remarks, 
@@ -433,128 +428,92 @@ const stockLogsColumns = [
                 <main className="p-6 mt-16">
                     {/* Inventory Table */}
                     <div className="bg-gray-100 p-6 rounded-lg shadow-md mb-6">
-                    <div className="flex justify-between items-center mb-4">
-                        {/* Tabs */}
-                        <div className="flex space-x-4">
-                            <span
-                            onClick={() => {
-                                setActiveTab("inventory");
-                                toast.success("Inventory table is now visible.", { position: "top-right" });
-                            }}
-                            className={`px-4 py-2 font-semibold cursor-pointer rounded-lg ${
-                                activeTab === "inventory" ? "bg-pink-600 text-white font-bold" : "text-black"
-                            }`}
-                            >
-                            Inventory
-                            </span>
-                            <span
-                            onClick={() => {
-                                setActiveTab("stockLogs");
-                                toast.success("Stock Logs table is now visible.", { position: "top-right" });
-                            }}
-                            className={`px-4 py-2 font-semibold cursor-pointer rounded-lg ${
-                                activeTab === "stockLogs" ? "bg-pink-600 text-white font-bold" : "text-black"
-                            }`}
-                            >
-                            Stock Logs
-                            </span>
-                        </div>
+                    <div className="mb-4">
+  {/* Tabs */}
+  <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
+    <div className="flex space-x-4">
+      <span
+        onClick={() => {
+          setActiveTab("inventory");
+          toast.success("Inventory table is now visible.", { position: "top-right" });
+        }}
+        className={`px-4 py-2 font-semibold cursor-pointer rounded-lg ${
+          activeTab === "inventory" ? "bg-pink-600 text-white font-bold" : "text-black"
+        }`}
+      >
+        Inventory
+      </span>
+      <span
+        onClick={() => {
+          setActiveTab("stockLogs");
+          toast.success("Stock Logs table is now visible.", { position: "top-right" });
+        }}
+        className={`px-4 py-2 font-semibold cursor-pointer rounded-lg ${
+          activeTab === "stockLogs" ? "bg-pink-600 text-white font-bold" : "text-black"
+        }`}
+      >
+        Stock Logs
+      </span>
+    </div>
 
-                        {activeTab === "inventory" && (
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                    <label className="font-medium text-sm whitespace-nowrap">Filter by Status:</label>
-                        <select
-                        className="p-2 border border-gray-300 rounded"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                        <option value="All">All</option>
-                        <option value="Available">Available</option>
-                        <option value="Out of Stock">Out of Stock</option>
-                        </select>
+    {activeTab === "inventory" && (
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full sm:w-auto">
+        {/* Filter */}
+        <div className="flex items-center gap-2">
+          <label className="font-medium text-sm whitespace-nowrap">Filter by Status:</label>
+          <select
+            className="p-2 border border-gray-300 rounded"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All</option>
+            <option value="Available">Available</option>
+            <option value="Out of Stock">Out of Stock</option>
+          </select>
+        </div>
 
-                    </div>
+        {/* Export Buttons */}
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button
+            onClick={handleExportCSV}
+            disabled={isExportingCSV}
+            className="bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            {isExportingCSV ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Exporting...</span>
+              </>
+            ) : (
+              <span>Export CSV</span>
+            )}
+          </button>
 
-               
-                    <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleExportCSV}
-                        disabled={isExportingCSV}
-                        className="bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                        >
-                        {isExportingCSV ? (
-                            <>
-                            <svg
-                                className="animate-spin h-4 w-4 text-white"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                            >
-                                <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                                ></circle>
-                                <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v8H4z"
-                                ></path>
-                            </svg>
-                            <span>Exporting...</span>
-                            </>
-                        ) : (
-                            <span>Export CSV</span>
-                        )}
-                        </button>
-
-
-                        <button
-                        onClick={handleExportPDF}
-                        disabled={isExportingPDF}
-                        className="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                        >
-                        {isExportingPDF ? (
-                            <>
-                            <svg
-                                className="animate-spin h-4 w-4 text-white"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                            >
-                                <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                                ></circle>
-                                <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v8H4z"
-                                ></path>
-                            </svg>
-                            <span>Exporting...</span>
-                            </>
-                        ) : (
-                            <span>Export PDF</span>
-                        )}
-                        </button>
-
-
-                    </div>
-                    </div>
-                           )}
-
-
-                        
-                        </div>
+          <button
+            onClick={handleExportPDF}
+            disabled={isExportingPDF}
+            className="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            {isExportingPDF ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Exporting...</span>
+              </>
+            ) : (
+              <span>Export PDF</span>
+            )}
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+</div>
 
 
 
