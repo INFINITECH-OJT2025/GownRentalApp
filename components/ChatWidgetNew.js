@@ -146,7 +146,7 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
   
       for (const user of customers) {
         if (user.id === currentUser.id) continue;
-  
+      
         const other = new Talk.User({
           id: String(user.id),
           name: user.name,
@@ -154,11 +154,24 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
           photoUrl: getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
           role: user.role || "customer",
         });
-  
+      
         const conversation = session.getOrCreateConversation(Talk.oneOnOneId(me, other));
         conversation.setParticipant(me);
         conversation.setParticipant(other);
+      
+        if (isAdmin) {
+          const today = new Date().toISOString().split("T")[0];
+          const welcomeKey = `welcomed_${user.id}_session`;
+          
+          if (!localStorage.getItem(welcomeKey)) {
+            conversation.sendMessage("Hello! 👋 I’m the Admin of Gown Rental. Welcome to our service! Let me know if you need any help.");
+            localStorage.setItem(welcomeKey, "1");
+          }
+        }
+        
+
       }
+      
   
       const containerId = isMobile ? "talkjs-container" : "talkjs-desktop-inbox-container";
       const mountTarget = document.getElementById(containerId);
