@@ -36,6 +36,9 @@ export default function ProductsPage() {
     const hiddenGroupedCount = filteredProducts.filter(p => p.is_hidden).length;
     const [groupedAllProducts, setGroupedAllProducts] = useState([]); // ✅ Declare first
     const groupedProductsCount = groupedAllProducts.filter(p => !p.is_hidden).length; // ✅ Use after
+    const [showSizeToggleModal, setShowSizeToggleModal] = useState(false);
+    const [selectedGroupToToggle, setSelectedGroupToToggle] = useState(null);
+
 
     const [showCategoryFilters, setShowCategoryFilters] = useState(false);
     const [isExportingCSV, setIsExportingCSV] = useState(false);
@@ -73,6 +76,43 @@ export default function ProductsPage() {
         })}`;
     };
     
+    const handleSelectiveHide = async () => {
+        const token = localStorage.getItem("token");
+        if (!token || !selectedGroupToToggle) return;
+      
+        const shouldHide = selectedGroupToToggle.is_hidden === 0;
+      
+        const selectedVariants = selectedGroupToToggle.groupedItems.filter((item) => item._selected !== false); // default selected = true
+      
+        try {
+          await Promise.all(
+            selectedVariants.map((item) =>
+              fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${item.id}/toggle-visibility`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ hide: shouldHide }),
+              }).then((res) => {
+                if (!res.ok) throw new Error(`Failed to toggle product ID ${item.id}`);
+              })
+            )
+          );
+      
+          toast.success(`Successfully ${shouldHide ? "hidden" : "unhidden"} selected sizes!`, {
+            position: "top-right",
+          });
+      
+          setShowSizeToggleModal(false);
+          setSelectedGroupToToggle(null);
+          fetchProducts(); // refresh after change
+        } catch (err) {
+          toast.error("❌ Something went wrong. Check console.", { position: "top-right" });
+          console.error(err);
+        }
+      };
+      
 
     const exportToCSV = () => {
         setIsExportingCSV(true);
@@ -196,16 +236,17 @@ useEffect(() => {
 useEffect(() => {
     let filtered = [...products];
 
-    if (selectedCategory) {
-        if (selectedCategory === "Hidden Products") {
-            filtered = products.filter((product) => product.is_hidden === 1);
-        } else {
-            filtered = products.filter(
-                (product) => product.category === selectedCategory && product.is_hidden === 0
-            );
-        }
+    if (selectedCategory === "Hidden Products") {
+        filtered = products.filter((product) => product.is_hidden === 1);
+    } else if (selectedCategory) {
+        filtered = products.filter(
+            (product) => product.category === selectedCategory && product.is_hidden === 0
+        );
+    } else {
+        // 🛠️ Fix: Filter only visible products for "All"
+        filtered = products.filter((product) => product.is_hidden === 0);
     }
-
+    
     if (searchQuery.trim() !== "") {
         filtered = filtered.filter((product) =>
             product.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -256,16 +297,15 @@ const filterByCategory = (category) => {
     let filtered = [...products];
 
     if (category === "Hidden Products") {
-        filtered = products.filter((product) => product.is_hidden === 1);
+        filtered = groupedAllProducts.filter((group) => group.is_hidden === 1);
     } else if (category !== null) {
-        filtered = products.filter((product) => product.category === category && product.is_hidden === 0);
-    }
-
-    if (searchQuery.trim() !== "") {
-        filtered = filtered.filter((product) =>
-            product.name.toLowerCase().includes(searchQuery.toLowerCase())
+        filtered = groupedAllProducts.filter(
+            (group) => group.category === category && group.is_hidden === 0
         );
+    } else {
+        filtered = groupedAllProducts.filter((group) => group.is_hidden === 0);
     }
+    
 
     // ✅ Apply grouping logic here
     const grouped = [];
@@ -673,41 +713,45 @@ const filterByCategory = (category) => {
         }, 1000);
     };
     
-    const handleHideProduct = async (productId) => {
+    const handleHideProduct = async (productGroup) => {
         const token = localStorage.getItem("token");
         if (!token) return;
     
+        // Match by group key (like in grouping logic)
+        const groupKey = `${productGroup.name}-${productGroup.price}-${productGroup.category}-${productGroup.description}-${productGroup.image_url}-${productGroup.start_date}-${productGroup.end_date}`;
+    
+        // Find all matching variants
+        const groupVariants = products.filter((p) => {
+            const key = `${p.name}-${p.price}-${p.category}-${p.description}-${p.image_url}-${p.start_date}-${p.end_date}`;
+            return key === groupKey;
+        });
+    
+        const shouldHide = productGroup.is_hidden === 0;
+    
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${productId}/toggle-visibility`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
+            await Promise.all(
+                groupVariants.map((item) =>
+                    fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${item.id}/toggle-visibility`, {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ hide: shouldHide }), // 👈 optional if your API expects it
+                    }).then((res) => {
+                        if (!res.ok) throw new Error(`Failed to toggle product ID ${item.id}`);
+                    })
+                )
+            );
+    
+            toast.success(`Product "${productGroup.name}" ${shouldHide ? "hidden" : "unhidden"}!`, {
+                position: "top-right",
             });
     
-            const result = await response.json();
-    
-            if (result.success) {
-                toast.success(result.message, { position: "top-right" });
-    
-                // ✅ Update local state to instantly reflect changes
-                setProducts((prevProducts) =>
-                    prevProducts.map((product) =>
-                        product.id === productId ? { ...product, is_hidden: product.is_hidden ? 0 : 1 } : product
-                    )
-                );
-    
-                // ✅ If currently in "Hidden Products", refresh the filter
-                if (selectedCategory === "Hidden Products") {
-                    setFilteredProducts(products.filter((p) => p.is_hidden === 1));
-                }
-            } else {
-                toast.error("Failed to toggle visibility: " + result.message, { position: "top-right" });
-            }
+            fetchProducts(); // Refresh after batch update
         } catch (error) {
-            console.error("Error toggling visibility:", error);
-            toast.error("An error occurred: " + error.message, { position: "top-right" });
+            console.error("Toggle visibility error:", error);
+            toast.error("❌ Failed to update group visibility.");
         }
     };
     
@@ -821,24 +865,28 @@ const filterByCategory = (category) => {
         {
             name: "Actions",
             cell: (row) => (
-                <div className="flex space-x-2">
-                    {/* Edit Button */}
-                    <button onClick={() => handleEdit(row)} className="text-pink-500 hover:text-pink-700">
-                        <Pencil size={20} />
-                    </button>
-    
-                    {/* Hide/Unhide Button */}
-                    <button 
-                    onClick={() => handleHideProduct(row.id)} 
-                    className={`hover:text-gray-700 ${row.is_hidden ? "text-red-500" : "text-green-500"}`}
-                    title={row.is_hidden ? "Click to Unhide" : "Click to Hide"}
+              <div className="flex space-x-2">
+                {row.is_hidden !== 1 && (
+                  <button
+                    onClick={() => handleEdit(row)}
+                    className="text-pink-500 hover:text-pink-700"
+                  >
+                    <Pencil size={20} />
+                  </button>
+                )}
+          
+                <button
+                  onClick={() => handleHideProduct(row)} // ✅ Call directly here
+                  className={`hover:text-gray-700 ${
+                    row.is_hidden ? "text-red-500" : "text-green-500"
+                  }`}
+                  title={row.is_hidden ? "Click to Unhide" : "Click to Hide"}
                 >
-                    {row.is_hidden ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {row.is_hidden ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
-
-                </div>
+              </div>
             ),
-        },
+          },          
     ];
     
     return (
@@ -981,12 +1029,11 @@ const filterByCategory = (category) => {
                                   count: groupedAllProducts.filter(p => !p.is_hidden).length, // ✅ always full
                                 },
                                 {
-                                  label: "Hidden",
-                                  icon: <EyeOff size={16} />,
-                                  value: "Hidden Products",
-                                  count: products.filter((p) => p.is_hidden === 1).length,
-                                },
-                              
+                                    label: "Hidden",
+                                    icon: <EyeOff size={16} />,
+                                    value: "Hidden Products",
+                                    count: groupedAllProducts.filter((p) => p.is_hidden === 1).length, // ✅ not products
+                                  },                                  
                                                                             
                             ].map(({ label, icon, value, count }) => {
                                 const isActive = selectedCategory === value;
@@ -1688,6 +1735,7 @@ const filterByCategory = (category) => {
         </div>
     </div>
 )}
+
 
         </div>
          </>
