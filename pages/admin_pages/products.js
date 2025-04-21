@@ -941,7 +941,7 @@ const filterByCategory = (category) => {
                 {/* Buttons Row */}
                 <div className="flex flex-wrap items-center gap-2">
 
-                <button
+                {/* <button
                         onClick={exportToCSV}
                         disabled={isExportingCSV}
                         className="flex items-center gap-2 bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
@@ -970,7 +970,7 @@ const filterByCategory = (category) => {
                             ) : (
                                 "Export PDF"
                             )}
-                            </button>
+                            </button> */}
 
 
                 </div>

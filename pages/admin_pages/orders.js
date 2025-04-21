@@ -486,7 +486,7 @@ export default function OrdersPage() {
                 {/* Right: Filter, Clear, Export */}
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mt-3 sm:mt-0">
 
-                <button
+                {/* <button
                     onClick={exportToCSV}
                     disabled={isExportingCSV}
                     className="bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
@@ -520,7 +520,7 @@ export default function OrdersPage() {
                     ) : (
                         <span>Export PDF</span>
                     )}
-                    </button>
+                    </button> */}
 
                 </div>
                 </div>
@@ -590,7 +590,7 @@ export default function OrdersPage() {
                         }}
                         className="bg-gray-500 text-white px-3 py-2 rounded text-sm hover:bg-gray-600"
                         >
-                        Clear
+                        Clear Date
                         </button>
 
                         {/* Filter Columns Button */}

@@ -397,8 +397,8 @@ export default function PromotionalPage() {
                             key={idx}
                             className="relative bg-pink-100 text-pink-800 shadow-md p-6 my-2 rounded-none overflow-hidden"
                         >
-                            <div className="absolute -left-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full z-10 shadow-sm"></div>
-                            <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full z-10 shadow-sm"></div>
+                            <div className="absolute -left-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-sm"></div>
+                            <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-sm"></div>
 
                             <div className="flex items-center justify-center mb-3 text-center">
                             <PartyPopper className="w-8 h-8 text-pink-500 mr-2" />
@@ -456,7 +456,7 @@ export default function PromotionalPage() {
                         ))}
                     </select>
 
-                    <button
+                    {/* <button
                     onClick={handleExportCSV}
                     disabled={isExportingCSV}
                     className="bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
@@ -469,7 +469,7 @@ export default function PromotionalPage() {
                     className="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                     {isExportingPDF ? "Exporting..." : "Export PDF"}
-                    </button>
+                    </button> */}
                 </div>
 
                 {/* Right side: Search bar */}

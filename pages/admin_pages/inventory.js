@@ -474,7 +474,7 @@ const stockLogsColumns = [
 
         {/* Export Buttons */}
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <button
+          {/* <button
             onClick={handleExportCSV}
             disabled={isExportingCSV}
             className="bg-pink-800 text-white px-4 py-2 rounded hover:bg-pink-900 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
@@ -490,9 +490,9 @@ const stockLogsColumns = [
             ) : (
               <span>Export CSV</span>
             )}
-          </button>
+          </button> */}
 
-          <button
+          {/* <button
             onClick={handleExportPDF}
             disabled={isExportingPDF}
             className="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
@@ -508,7 +508,7 @@ const stockLogsColumns = [
             ) : (
               <span>Export PDF</span>
             )}
-          </button>
+          </button> */}
         </div>
       </div>
     )}
