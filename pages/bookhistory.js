@@ -833,7 +833,7 @@ const handleShowProduct = (bookingRow) => {
                           />
                       </div>
 
-                      <div className="flex flex-col items-end gap-2 px-6 md:px-16 mt-4 z-3">
+                      <div className="flex flex-col items-end gap-2 mt-4 z-3">
                         {/* Filter Columns Button */}
                         <div className="relative">
                         <button

@@ -216,7 +216,7 @@ export default function Navbar() {
                         </button>
 
                        {/* NEW - Desktop Profile Dropdown */}
-                       {userRole && (
+                       {/* {userRole && (
                         <div className="relative profile-dropdown hidden md:block">
                         <button
                         onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
@@ -263,7 +263,24 @@ export default function Navbar() {
                    
                         )}
                     </div>
-                    )}
+                    )} */}
+
+                    <button
+                        onClick={() => handleNavigation("/profile")}
+                        className={`${
+                            pathname === "/profile" ? "text-pink-600 " : "text-gray-700"
+                        } hover:text-pink-600 ${loadingLink === "/profile" ? "opacity-50 cursor-not-allowed" : ""}`}
+                        disabled={loadingLink === "/profile"}
+                        >
+                        {loadingLink === "/profile" ? "Loading..." : "Profile"}
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm transition disabled:opacity-50"
+                            disabled={loadingLogout}
+                        >
+                            {loadingLogout ? "Logging out..." : "Logout"}
+                        </button>
                             </>
                         
                     )}

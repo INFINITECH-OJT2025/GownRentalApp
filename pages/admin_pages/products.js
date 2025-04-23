@@ -17,6 +17,8 @@ import { format } from "date-fns";
 
 
 export default function ProductsPage() {
+    let hideUnhideCooldown = false;
+
      const [darkMode, setDarkMode] = useState(false);
     const [products, setProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -436,13 +438,17 @@ const filterByCategory = (category) => {
     const handleEdit = (product) => {
         setIsAddModalOpen(false);
     
-        const matchingGroup = product.groupedItems || [product]; // ✅ fallback for ungrouped items
+        const matchingGroup = product.groupedItems || [product];
     
         const groupedSizes = {};
         matchingGroup.forEach((item) => {
-            groupedSizes[item.sizes] = item.stock;
+            if (groupedSizes[item.sizes]) {
+                groupedSizes[item.sizes] += Number(item.stock); 
+            } else {
+                groupedSizes[item.sizes] = Number(item.stock); 
+            }
         });
-    
+        
         setFormData({
             name: product.name,
             price: product.price,
@@ -717,10 +723,24 @@ const filterByCategory = (category) => {
         const token = localStorage.getItem("token");
         if (!token) return;
     
-        // Match by group key (like in grouping logic)
+        // ✅ Cooldown: prevent spamming
+        if (hideUnhideCooldown) {
+            toast.error("Please wait a few seconds before trying again.");
+            return;
+        }
+    
+        const confirmToggle = window.confirm(
+            `Are you sure you want to ${productGroup.is_hidden ? "unhide" : "hide"} this product?`
+        );
+        if (!confirmToggle) return;
+    
+        hideUnhideCooldown = true;
+        setTimeout(() => {
+            hideUnhideCooldown = false;
+        }, 3000); // cooldown for 3 seconds
+    
         const groupKey = `${productGroup.name}-${productGroup.price}-${productGroup.category}-${productGroup.description}-${productGroup.image_url}-${productGroup.start_date}-${productGroup.end_date}`;
     
-        // Find all matching variants
         const groupVariants = products.filter((p) => {
             const key = `${p.name}-${p.price}-${p.category}-${p.description}-${p.image_url}-${p.start_date}-${p.end_date}`;
             return key === groupKey;
@@ -737,7 +757,7 @@ const filterByCategory = (category) => {
                             Authorization: `Bearer ${token}`,
                             "Content-Type": "application/json",
                         },
-                        body: JSON.stringify({ hide: shouldHide }), // 👈 optional if your API expects it
+                        body: JSON.stringify({ hide: shouldHide }),
                     }).then((res) => {
                         if (!res.ok) throw new Error(`Failed to toggle product ID ${item.id}`);
                     })
@@ -748,7 +768,7 @@ const filterByCategory = (category) => {
                 position: "top-right",
             });
     
-            fetchProducts(); // Refresh after batch update
+            fetchProducts();
         } catch (error) {
             console.error("Toggle visibility error:", error);
             toast.error("❌ Failed to update group visibility.");
@@ -793,16 +813,37 @@ const filterByCategory = (category) => {
         };
     
         try {
-            // 🔁 Update existing sizes
-            for (const item of selectedProductGroup) {
-                const stock = Number(formData.sizesWithStock[item.sizes] || 0);
-                await axios.post(
-                    `${process.env.NEXT_PUBLIC_API_URL}/products/${item.id}/update`,
-                    { ...sharedFields, stock },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-            }
-    
+                const sizeGroups = {};
+                for (const item of selectedProductGroup) {
+                const size = item.sizes;
+                if (!sizeGroups[size]) sizeGroups[size] = [];
+                sizeGroups[size].push(item);
+                }
+
+                for (const [size, items] of Object.entries(sizeGroups)) {
+                    const updatedStock = Number(formData.sizesWithStock[size] || 0);
+                    const perItemStock = Math.floor(updatedStock / items.length); // Divide equally
+                  
+                    let remainder = updatedStock % items.length;
+                  
+                    for (const item of items) {
+                      const newStock = perItemStock + (remainder > 0 ? 1 : 0); // Give extra 1 if remainder exists
+                      remainder--;
+                  
+                      const oldStock = Number(item.stock);
+                      await axios.post(
+                        `${process.env.NEXT_PUBLIC_API_URL}/products/${item.id}/update`,
+                        {
+                          ...sharedFields,
+                          stock: newStock,
+                          stock_changed: newStock - oldStock,
+                        },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                      );
+                    }
+                  }
+                  
+
             // ➕ Insert new sizes
             for (const [sizes, stock] of Object.entries(formData.sizesWithStock)) {
                 if (!existingSizes.includes(sizes)) {
@@ -1625,17 +1666,32 @@ const filterByCategory = (category) => {
                         </div>
                       
                         {formData.sizesWithStock?.[sizes] !== undefined && (
-                          <input
-                            type="number"
-                            placeholder="Stock"
-                            value={formData.sizesWithStock[sizes]}
-                            onChange={(e) => {
-                              const updated = { ...formData.sizesWithStock, [sizes]: e.target.value };
-                              setFormData((prev) => ({ ...prev, sizesWithStock: updated }));
-                            }}
-                            className="w-24 p-1 text-xs border rounded"
-                            min="0"
-                          />
+                         <input
+                         type="number"
+                         placeholder="Stock"
+                         value={formData.sizesWithStock[sizes] ?? ""}
+                         onChange={(e) => {
+                           const updated = {
+                             ...formData.sizesWithStock,
+                             [sizes]: e.target.value,
+                           };
+                       
+                           // ✅ Trigger toast if zero is typed
+                           if (Number(e.target.value) === 0) {
+                             toast.error("Stock cannot be set to 0 here. Please go to Inventory to deactivate this size.", {
+                               id: "zero-stock-warning",
+                               position: "top-right",
+                             });
+                           } else {
+                             toast.dismiss("zero-stock-warning");
+                           }
+                       
+                           setFormData((prev) => ({ ...prev, sizesWithStock: updated }));
+                         }}
+                         className="w-24 p-1 text-xs border rounded"
+                         min="0"
+                       />
+                       
                         )}
                       </label>
                       

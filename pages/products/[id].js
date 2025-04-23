@@ -281,13 +281,23 @@ useEffect(() => {
     if (response.data.success) {
       const productData = response.data.product;
 
-      const enrichedSizes = Array.isArray(productData.size_stock)
-      ? productData.size_stock.map((entry) => ({
-          size: entry.size,
-          stock: entry.stock,
-          product_id: entry.product_id,
-        }))
-      : [];
+      const mergedSizesMap = {};
+
+      if (Array.isArray(productData.size_stock)) {
+        productData.size_stock.forEach((entry) => {
+          if (!mergedSizesMap[entry.size]) {
+            mergedSizesMap[entry.size] = {
+              size: entry.size,
+              stock: 0,
+              product_id: entry.product_id, // first product_id encountered
+            };
+          }
+      
+          mergedSizesMap[entry.size].stock += entry.stock;
+        });
+      }
+      
+      const enrichedSizes = Object.values(mergedSizesMap);      
 
 
       console.log("✅ Enriched Sizes:", enrichedSizes);
