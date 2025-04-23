@@ -41,7 +41,7 @@ export default function AdminAnalyticsSection({ isSidebarOpen }) {
     const [isExportingPDF, setIsExportingPDF] = useState(false);
     const [isExportingCSV, setIsExportingCSV] = useState(false);
     
-    const successfulStatuses = ["approved", "picked up", "returned"];
+    const successfulStatuses = ["returned"];
 
 const filteredTableData = stats?.bookingsList?.filter((b) => {
   const year = new Date(b.created_at).getFullYear();
