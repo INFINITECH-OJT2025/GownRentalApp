@@ -102,7 +102,7 @@ public function getStats(Request $request)
         $completedBookings = Booking::where('status', 'returned')->count();
 
         $monthlyBookings = Booking::selectRaw('YEAR(created_at) as year, MONTH(created_at) as month, COUNT(id) as count')
-            ->whereIn('status', ['approved', 'picked up', 'returned'])
+           ->where('status', 'returned')
             ->groupBy('year', 'month')
             ->orderBy('year', 'desc')
             ->orderBy('month', 'asc')
