@@ -12,23 +12,36 @@ use Illuminate\Support\Facades\Auth;
 class ReviewController extends Controller
 {
     public function getReviews($productId)
-{
-    if (!\App\Models\Product::find($productId)) {
-        return response()->json(['success' => false, 'message' => 'Product not found'], 404);
-    }
-
-    $reviews = Review::where('product_id', $productId)
-        ->with(['user:id,name'])
+    {
+        $mainProduct = Product::find($productId);
+    
+        if (!$mainProduct) {
+            return response()->json(['success' => false, 'message' => 'Product not found'], 404);
+        }
+    
+        // Get all matching product IDs with same name, category, and price (excluding size)
+        $relatedProductIds = Product::where('name', $mainProduct->name)
+            ->where('category', $mainProduct->category)
+            ->where('price', $mainProduct->price)
+            ->pluck('id');
+    
+        // Fetch all reviews for those related product IDs
+        $reviews = Review::whereIn('product_id', $relatedProductIds)
+        ->with([
+            'user:id,name',
+            'product:id,name,sizes'
+        ])
         ->select('id', 'product_id', 'user_id', 'rating', 'comment', 'admin_reply', 'created_at', 'edit_count')
+        ->orderBy('created_at', 'desc')
         ->get();
-
-    if ($reviews->isEmpty()) {
-        return response()->json(['success' => false, 'message' => 'No reviews found'], 200);
+    
+        if ($reviews->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'No reviews found'], 200);
+        }
+    
+        return response()->json(['success' => true, 'reviews' => $reviews], 200);
     }
-
-    return response()->json(['success' => true, 'reviews' => $reviews], 200);
-}
-
+    
 public function createReview(Request $request)
 {
     try {
