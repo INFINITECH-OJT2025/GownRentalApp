@@ -103,30 +103,68 @@ useEffect(() => {
 
   // ✅ Fetch Reviews
   
-  useEffect(() => {
-    if (!productId) return;
+ // 👇 Place this ABOVE your `useEffect(() => { fetchReviews() }, [productId])`
+const fetchReviews = async () => {
+  try {
+    const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/reviews/${productId}`, {
+      headers: { Accept: "application/json" },
+    });
 
-    const fetchReviews = async () => {
-      try {
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/reviews/${productId}`, {
-          headers: { Accept: "application/json" },
-        });
+    if (response.status === 200 && response.data.success) {
+      setReviews(response.data.reviews);
+    } else {
+      setReviews([]);
+    }
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    setError(error.response?.data?.message || "Failed to load reviews.");
+  } finally {
+    setLoading(false);
+  }
+};
 
-        if (response.status === 200 && response.data.success) {
-          setReviews(response.data.reviews);
-        } else {
-          setReviews([]);
-        }
-      } catch (error) {
-        console.error("Error fetching reviews:", error);
-        setError(error.response?.data?.message || "Failed to load reviews.");
-      } finally {
-        setLoading(false);
+const checkReviewEligibility = async () => {
+  try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+          console.warn("⚠ No authentication token found. Skipping review eligibility check.");
+          return;
       }
-    };
 
-    fetchReviews();
-  }, [productId]);
+      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/bookings/check-review-eligibility/${productId}`;
+      console.log("Checking review eligibility with API:", apiUrl);
+
+      const response = await axios.get(apiUrl, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+
+      if (response.status === 200 && response.data.success) {
+        const unreviewed = response.data.unreviewed_bookings || [];
+        setUnreviewedBookings(unreviewed);
+      }
+       else {
+          console.warn("⚠ Review eligibility check failed:", response.data.message);
+          setUnreviewedBookings([]);
+      }
+  } catch (error) {
+      console.error("❌ Error checking review eligibility:", error);
+
+      if (!error.response) {
+          alert("⚠ Network error! Please check your internet connection.");
+      } else if (error.response.status === 404) {
+          alert("⚠ No eligible bookings found for review.");
+      } else {
+          alert("⚠ Unable to check review eligibility. Please try again later.");
+      }
+
+      setUnreviewedBookings([]); // Prevent UI crash
+  }
+};
+
+useEffect(() => {
+  if (!productId) return;
+  fetchReviews();
+}, [productId]);
 
   useEffect(() => {
     if (!productId) {
@@ -134,43 +172,7 @@ useEffect(() => {
         return;
     }
 
-    const checkReviewEligibility = async () => {
-        try {
-            const token = localStorage.getItem("token");
-            if (!token) {
-                console.warn("⚠ No authentication token found. Skipping review eligibility check.");
-                return;
-            }
 
-            const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/bookings/check-review-eligibility/${productId}`;
-            console.log("Checking review eligibility with API:", apiUrl);
-
-            const response = await axios.get(apiUrl, {
-                headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-            });
-
-            if (response.status === 200 && response.data.success) {
-              const unreviewed = response.data.unreviewed_bookings || [];
-              setUnreviewedBookings(unreviewed);
-            }
-             else {
-                console.warn("⚠ Review eligibility check failed:", response.data.message);
-                setUnreviewedBookings([]);
-            }
-        } catch (error) {
-            console.error("❌ Error checking review eligibility:", error);
-
-            if (!error.response) {
-                alert("⚠ Network error! Please check your internet connection.");
-            } else if (error.response.status === 404) {
-                alert("⚠ No eligible bookings found for review.");
-            } else {
-                alert("⚠ Unable to check review eligibility. Please try again later.");
-            }
-
-            setUnreviewedBookings([]); // Prevent UI crash
-        }
-    };
 
     checkReviewEligibility();
 }, [productId]);
@@ -210,7 +212,9 @@ const submitReview = async () => {
           position: "top-right",
         });
       } else {
-        setReviews([...reviews, response.data.review]);
+        await fetchReviews(); // ⬅ Refresh updated reviews from server
+        await checkReviewEligibility(); // ⬅ Refresh unreviewed bookings list
+        
         toast.success("Review submitted successfully!", {
           duration: 3000,
           position: "top-right",
@@ -253,9 +257,12 @@ const handleReviewUpdate = async (reviewId) => {
       toast.success("Review updated!");
       const updated = res.data.review;
 
-      // ✅ Update the local review
       setReviews((prev) =>
-        prev.map((r) => (r.id === reviewId ? updated : r))
+        prev.map((r) =>
+          r.id === reviewId
+            ? { ...updated, product: r.product, user: r.user }
+            : r
+        )
       );
 
       // ✅ Exit edit mode
