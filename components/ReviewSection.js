@@ -380,9 +380,11 @@ const handleReviewUpdate = async (reviewId) => {
       ) : (
         <>
           {currentReviews.map((review) => (
-            <div key={review.id} className="border-b py-4">
-              <p className="font-semibold">{review.user ? review.user.name : "Anonymous"}</p>
-          
+          <div key={review.id} className="border-b py-4">
+          <p className="font-semibold">{review.user ? review.user.name : "Anonymous"}</p>
+          <p className="text-sm text-gray-500 mb-1">
+            Product Size: {review.product?.sizes || "Unknown"}
+          </p>
               {/* ⭐ Display Saved Rating */}
               <div className="flex text-yellow-500">
                 {[...Array(Number(review.rating))].map((_, i) => (
