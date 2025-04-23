@@ -346,6 +346,31 @@ public function getProductsWithCounts()
         }
     }
 
+    // public function getInventory()
+    // {
+    //     try {
+    //         Log::info('Fetching inventory list (grouped).');
+
+    //         $products = Product::select('name', 'price', 'category', 'sizes')
+    //             ->selectRaw('SUM(stock) as stock')
+    //             ->groupBy('name', 'price', 'category', 'sizes')
+    //             ->get();
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'data' => $products
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         Log::error('Error fetching inventory: ' . $e->getMessage());
+
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Server error: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+
+
     /**
      * Fetch a single inventory item.
      */
@@ -465,7 +490,7 @@ public function updateProduct(Request $request, $id)
         'stock' => 'nullable|integer|min:0',
         'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         'image_url' => 'nullable|string',
-        'sizes' => 'nullable|string', // ✅ Ensure sizes is a string, not an array
+        'sizes' => 'nullable|string',
     ]);
 
     try {
@@ -478,19 +503,33 @@ public function updateProduct(Request $request, $id)
             ], 404);
         }
 
+        $originalStock = $product->stock; // ✅ Capture before update
+
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('products', 'public');
             $validated['image'] = str_replace("storage/", "", $imagePath);
         } elseif ($request->filled('image_url')) {
             $validated['image'] = str_replace(["/storage/", env('NEXT_PUBLIC_BACKEND_URL') . "/storage/"], "", $request->image_url);
-        }  
+        }
 
-        // ✅ Convert array to a proper comma-separated string
         if ($request->filled('sizes') && is_array($request->sizes)) {
             $validated['sizes'] = implode(", ", $request->sizes);
         }
 
         $product->update(array_filter($validated));
+
+        // ✅ Log stock adjustment if stock was changed
+        if (isset($validated['stock']) && $validated['stock'] != $originalStock) {
+            $difference = $validated['stock'] - $originalStock;
+
+            if ($difference !== 0) {
+                \App\Models\StockAdjustment::create([
+                    'product_id' => $product->id,
+                    'stock_added' => $difference,
+                    'remarks' => "Stock updated via admin panel. From {$originalStock} to {$validated['stock']}",
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
