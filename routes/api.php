@@ -112,40 +112,33 @@ Route::get('/reviews/{productId}', [ReviewController::class, 'getReviews']); // 
 Route::middleware(['auth:api'])->get('/bookings/check-review-eligibility/{productId}', function ($productId) {
     try {
         $userId = Auth::id();
-
         if (!$userId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        if (!\App\Models\Product::find($productId)) {
+        $mainProduct = \App\Models\Product::find($productId);
+        if (!$mainProduct) {
             return response()->json(['success' => false, 'message' => 'Product not found'], 404);
         }
 
-        // ✅ Get returned bookings with ID + reference number
+        // 🔍 Get all grouped products (same name, category, and price)
+        $groupedProductIds = \App\Models\Product::where('name', $mainProduct->name)
+            ->where('category', $mainProduct->category)
+            ->where('price', $mainProduct->price)
+            ->pluck('id');
+
+        // ✅ Get all returned bookings for any of the grouped product IDs
         $returnedBookings = \App\Models\Booking::where('user_id', $userId)
-            ->where('product_id', $productId)
+            ->whereIn('product_id', $groupedProductIds)
             ->where('status', 'returned')
             ->get(['id', 'reference_number']);
 
-        if ($returnedBookings->isEmpty()) {
-            return response()->json([
-                'success' => true,
-                'can_review' => false,
-                'message' => 'No returned bookings found.',
-                'unreviewed_bookings' => []
-            ]);
-        }
-
-        // ✅ Get already reviewed booking IDs
+        // ✅ Filter out already-reviewed ones
         $reviewedBookingIds = \App\Models\Review::where('user_id', $userId)
             ->whereIn('booking_id', $returnedBookings->pluck('id'))
             ->pluck('booking_id');
 
-        // ✅ Filter out reviewed ones
-        $unreviewed = $returnedBookings->filter(function ($booking) use ($reviewedBookingIds) {
-            return !$reviewedBookingIds->contains($booking->id);
-        });
-
+        $unreviewed = $returnedBookings->filter(fn($booking) => !$reviewedBookingIds->contains($booking->id));
         $unreviewedRefs = $unreviewed->pluck('reference_number');
 
         return response()->json([
