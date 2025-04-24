@@ -296,51 +296,49 @@ export default function OrdersPage() {
     
     
     const handleStatusChange = async (id, newStatus) => {
-        setIsUpdatingStatus((prev) => ({ ...prev, [id]: true })); // ✅ Start loading for this order
+        setIsUpdatingStatus((prev) => ({ ...prev, [id]: true }));
         const token = localStorage.getItem("token");
     
         if (!token) {
-            console.error("Unauthorized: No token found.");
-            alert("Unauthorized: No token found.");
-            setIsUpdatingStatus((prev) => ({ ...prev, [id]: false })); // ✅ Stop loading
-            return;
-        }
-    
-        const validStatuses = ["pending", "approved", "picked up", "canceled", "returned"];
-        if (!validStatuses.includes(newStatus)) {
-            console.error("Invalid status:", newStatus);
-            alert("Invalid status selected.");
-            setIsUpdatingStatus((prev) => ({ ...prev, [id]: false })); // ✅ Stop loading
+            toast.error("Unauthorized: No token found.", { position: "top-right" });
+            setIsUpdatingStatus((prev) => ({ ...prev, [id]: false }));
             return;
         }
     
         try {
-            console.log(`Updating order ${id} to status: ${newStatus}`);
-    
             const response = await axios.put(
-                `${process.env.NEXT_PUBLIC_API_URL}/orders/${id}/update-status`,            
+                `${process.env.NEXT_PUBLIC_API_URL}/orders/${id}/update-status`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
     
             if (response.data.success) {
-                console.log("Order updated successfully:", response.data);
                 toast.success(`Order ${orders.find(o => o.id === id)?.reference_number || "N/A"} updated to: ${newStatus}`, { position: "top-right" });
-                fetchOrders(); // ✅ Refresh orders after update
+    
+                // ✅ Refetch orders
+                const refreshed = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/orders`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+    
+                if (refreshed.data.success) {
+                    const newOrders = refreshed.data.data;
+                    setOrders(newOrders);
+                    setFilteredOrders(newOrders); 
+                    setSelectedFilter("all");    
+                    updateStatusCounts(newOrders);
+                }
             } else {
-                console.error("API responded with an error:", response.data);
-                toast.error(`Failed to update order ${orders.find(o => o.id === id)?.reference_number || "N/A"}: ${response.data.message}`, { position: "top-right" });
+                toast.error(`Update failed: ${response.data.message}`, { position: "top-right" });
             }
+    
         } catch (error) {
-            console.error("Error updating status:", error.response?.data || error);
-            toast.error(`⚠️ Error updating order ${orders.find(o => o.id === id)?.reference_number || "N/A"}. Please try again.`, { position: "top-right" });
+            console.error("Error updating status:", error);
+            toast.error("⚠️ Error updating order. Please try again.", { position: "top-right" });
         } finally {
-            setIsUpdatingStatus((prev) => ({ ...prev, [id]: false })); // ✅ Stop loading
+            setIsUpdatingStatus((prev) => ({ ...prev, [id]: false }));
         }
     };
     
-    
-
     const handleFilterChange = (status) => {
         setSelectedFilter(status);
         setIsFilterLoading(true); // Start loading
@@ -586,7 +584,7 @@ export default function OrdersPage() {
                         onClick={() => {
                             setFilterDate("");
                             setFilteredOrders(orders);
-                            toast.success("Date filter cleared");
+                            toast.success("Date filter cleared", { position: "top-right" });
                         }}
                         className="bg-gray-500 text-white px-3 py-2 rounded text-sm hover:bg-gray-600"
                         >

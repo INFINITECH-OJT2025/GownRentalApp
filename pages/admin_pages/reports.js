@@ -231,6 +231,7 @@ export default function BookingReports() {
                 </span>
             ),
         },
+        { name: "Created Date", selector: row => formatDate(row.created_at), sortable: true, width: "130px" },
     ];
     
     return (

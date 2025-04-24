@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MessageSquare } from "lucide-react";
 
 const getImageUrl = (img) => {
   if (!img) return null;
@@ -406,7 +407,7 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
         }}
         className="bg-pink-600 hover:bg-pink-700 text-white p-3 rounded-full shadow-lg"
       >
-        💬
+          <MessageSquare className="w-8 h-8" />
       </button>
       {localHasNewMessage && (
         <span className="absolute -top-1 -right-1 bg-red-600 w-3 h-3 rounded-full animate-ping" />

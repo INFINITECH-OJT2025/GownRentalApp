@@ -8,8 +8,8 @@ import { FavoritesProvider } from "../context/FavoritesContext";
 import { Toaster } from "react-hot-toast";
 import { useEffect, useState } from "react";
 import ChatWidgetNew from "../components/ChatWidgetNew";
-import { UserProvider } from "../context/UserContext"; // ✅ NEW
-
+import { UserProvider } from "../context/UserContext";
+import { MessageSquare } from "lucide-react";
 import Pusher from 'pusher-js';
 
 
@@ -192,12 +192,13 @@ export default function MyApp({ Component, pageProps }) {
                               <>
                                 {!showChat && (
                                   <div className="fixed bottom-5 right-5 z-[9999]">
-                                    <button
-                                      onClick={() => setShowChat(true)}
-                                      className="bg-pink-600 hover:bg-pink-700 text-white p-3 rounded-full shadow-lg"
-                                    >
-                                      💬
-                                    </button>
+                                   <button
+                                    onClick={() => setShowChat(true)}
+                                    className="bg-pink-600 hover:bg-pink-700 text-white p-3 rounded-full shadow-lg"
+                                  >
+                                    <MessageSquare className="w-8 h-8" />
+                                  </button>
+
                                     {hasNewMessage && (
                                       <span className="absolute -top-1 -right-1 bg-red-600 w-3 h-3 rounded-full animate-ping" />
                                     )}
