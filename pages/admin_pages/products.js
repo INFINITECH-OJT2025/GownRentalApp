@@ -46,6 +46,17 @@ export default function ProductsPage() {
     const [isExportingCSV, setIsExportingCSV] = useState(false);
     const [isExportingPDF, setIsExportingPDF] = useState(false);
     
+    const getAvailabilityNote = (startDate, endDate) => {
+        const today = new Date();
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+      
+        if (end < today) return "Expired";
+        if (start > today) return "Upcoming";
+        return "Available";
+      };
+
+      
     const [selectedSize, setSelectedsizes] = useState("Medium");
 
     const [searchQuery, setSearchQuery] = useState("");
@@ -894,6 +905,22 @@ const filterByCategory = (category) => {
             sortable: true,
         },
         {
+            name: "Discounted Price",
+            selector: (row) =>
+              row.discounted_price && row.discounted_price < row.price
+                ? `₱${parseFloat(row.discounted_price).toLocaleString()}`
+                : "-",
+            sortable: true,
+          },
+          {
+            name: "Discount %",
+            selector: (row) =>
+              row.discounted_price && row.discounted_price < row.price
+                ? `${Math.round(((row.price - row.discounted_price) / row.price) * 100)}%`
+                : "0%",
+            sortable: true,
+          },                    
+        {
             name: "Category",
             selector: (row) => row.category || "Uncategorized",
             sortable: true,
@@ -928,6 +955,30 @@ const filterByCategory = (category) => {
               </div>
             ),
           },          
+          {
+            name: "Availability",
+            selector: (row) => {
+              const status = getAvailabilityNote(row.start_date, row.end_date);
+              let bgColor = "";
+              let textColor = "text-white";
+          
+              if (status === "Available") bgColor = "bg-green-600";
+              else if (status === "Upcoming") bgColor = "bg-yellow-400 text-black";
+              else if (status.includes("Expired")) bgColor = "bg-red-500";
+          
+              return (
+                <div className="inline-block max-w-[160px] text-center">
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-semibold leading-snug break-words ${bgColor} ${textColor}`}
+                  >
+                    {status}
+                  </span>
+                </div>
+              );
+            },
+            sortable: false,
+            wrap: true,
+          },                 
     ];
     
     return (

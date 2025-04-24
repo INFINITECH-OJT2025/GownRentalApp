@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { DateRange } from "react-date-range";
-import { format, eachMonthOfInterval, isBefore, isAfter, startOfMonth } from "date-fns";
+import { format, eachMonthOfInterval, isBefore, isAfter, startOfMonth, max } from "date-fns";
 import { toast } from "react-hot-toast";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 
 export default function RentalCalendars({ product, rentalDetails, setRentalDetails }) {
-  const minDate = new Date(product?.start_date);
+  const today = new Date();
+  const productStartDate = new Date(product?.start_date);
+  const minDate = max([today, productStartDate]);
   const maxDate = new Date(product?.end_date);
 
   const [range, setRange] = useState([
