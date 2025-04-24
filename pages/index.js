@@ -41,6 +41,7 @@ export default function HomePage() {
 
     const [categories, setCategories] = useState([]);
 
+    const [returnCounts, setReturnCounts] = useState({});
 
     const [priceRange, setPriceRange] = useState(50000); // Default max price
     const [rentalDetails, setRentalDetails] = useState({});
@@ -54,7 +55,14 @@ export default function HomePage() {
     const [currentPage, setCurrentPage] = useState(1); // For Available Gowns
     const [currentOutOfStockPage, setCurrentOutOfStockPage] = useState(1); 
 
-    const sortedProducts = [...products].sort((a, b) => {
+    const enrichedProducts = products.map(product => ({
+        ...product,
+        returned_count: returnCounts[product.name] || 0
+      }));
+      
+      const sortedProducts = [...enrichedProducts].sort((a, b) => {
+      
+
         const createdA = a.created_at ? parseISO(a.created_at) : null;
         const createdB = b.created_at ? parseISO(b.created_at) : null;
       
@@ -70,6 +78,9 @@ export default function HomePage() {
           if (!isNew && hasDiscount) return 3;
           return 4;
         };
+
+
+        
       
         const priorityA = getPriority(isNewA, hasDiscountA);
         const priorityB = getPriority(isNewB, hasDiscountB);
@@ -155,6 +166,21 @@ export default function HomePage() {
         fetchProducts();
     }, []);
     
+    useEffect(() => {
+        const fetchReturnCounts = async () => {
+          try {
+            const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/products/return-counts`);
+            if (res.data.success) {
+              setReturnCounts(res.data.data); // Format: { "Angola": 2, "Angelina2": 1 }
+            }
+          } catch (e) {
+            console.error("Failed to fetch return counts", e);
+          }
+        };
+      
+        fetchReturnCounts();
+      }, []);
+      
     
     
         // Array of banner background colors
