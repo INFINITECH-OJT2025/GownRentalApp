@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\Booking;
+
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -60,6 +62,32 @@ class ProductController extends Controller
         'data' => $products
     ]);
 }
+
+
+public function getReturnCounts()
+{
+    $returnedBookings = Booking::where('status', 'returned')
+        ->with('product:id,name')
+        ->get();
+
+    $counts = [];
+
+    foreach ($returnedBookings as $booking) {
+        if ($booking->product) {
+            $name = $booking->product->name;
+            if (!isset($counts[$name])) {
+                $counts[$name] = 0;
+            }
+            $counts[$name]++;
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => $counts
+    ]);
+}
+
     
     public function adminIndex()
 {

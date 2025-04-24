@@ -192,6 +192,8 @@ Route::middleware('auth:api')->group(function () {
 
 });
 
+
+
 Route::middleware('auth:api')->group(function () {
     // ... other routes
 
@@ -289,7 +291,8 @@ Route::middleware('auth:api')->get('/customers-today', function () {
 
 
 Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{id}', [ProductController::class, 'show']); // ❌ Not RESTful
+Route::get('/products/return-counts', [ProductController::class, 'getReturnCounts']);
+Route::get('/products/{id}', [ProductController::class, 'show']);
 
 Route::get('/categories', [ProductController::class, 'getCategories']);
 
