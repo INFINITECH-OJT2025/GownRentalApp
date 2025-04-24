@@ -363,14 +363,18 @@ const handleSelect = async (user) => {
       onClick={(e) => {
         e.stopPropagation();
         setSelectedCustomer(null);
+        if (popupRef.current && typeof popupRef.current.select === "function") {
+          popupRef.current.select(null); // Go back to inbox
+        }
       }}
+      
     >
       ❌
     </button>
   </div>
 ) : (
   <span className="text-gray-500 italic">
-    {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+    {isAdmin ? "Select a customer who logged in today" : "Select to Connect with Admin"}
   </span>
 )}
 
@@ -476,14 +480,18 @@ const handleSelect = async (user) => {
       onClick={(e) => {
         e.stopPropagation();
         setSelectedCustomer(null);
+        if (popupRef.current && typeof popupRef.current.select === "function") {
+          popupRef.current.select(null); // Go back to inbox
+        }
       }}
+      
     >
       ❌
     </button>
   </div>
 ) : (
   <span className="text-gray-500 text-sm">
-    {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+    {isAdmin ? "Select a customer who logged in today" : "Select to Connect with Admin"}
   </span>
 )}
 
