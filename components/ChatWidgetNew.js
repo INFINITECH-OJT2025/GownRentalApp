@@ -346,20 +346,34 @@ const handleSelect = async (user) => {
     }}
   >
     {selectedCustomer ? (
-      <div className="flex items-center gap-2">
-        <img
-          src={getImageUrl(selectedCustomer.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.name)}`}
-          className="w-6 h-6 rounded-full"
-          alt=""
-        />
-        <span>{selectedCustomer.name}</span>
-        <span className={selectedCustomer.is_active ? "text-green-500" : "text-red-500"}>
-          {selectedCustomer.is_active ? "🟢 Active" : "🔴 Inactive"}
-        </span>
-      </div>
-    ) : (
-      <span className="text-gray-500">{isAdmin ? "Select a customer who logged in today" : "Select to Connect with Admin"}</span>
-    )}
+  <div className="flex items-center gap-2 w-full justify-between">
+    <div className="flex items-center gap-2">
+      <img
+        src={getImageUrl(selectedCustomer.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.name)}`}
+        className="w-6 h-6 rounded-full"
+        alt="Selected"
+      />
+      <span>{selectedCustomer.name}</span>
+      <span className={selectedCustomer.is_active ? "text-green-500" : "text-red-500"}>
+        {selectedCustomer.is_active ? "🟢 Active" : "🔴 Inactive"}
+      </span>
+    </div>
+    <button
+      className="text-gray-400 hover:text-red-600 ml-2 text-sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        setSelectedCustomer(null);
+      }}
+    >
+      ❌
+    </button>
+  </div>
+) : (
+  <span className="text-gray-500 italic">
+    {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+  </span>
+)}
+
   </div>
 
   {dropdownOpen && (
@@ -444,23 +458,35 @@ const handleSelect = async (user) => {
       setDropdownOpen((prev) => !prev);
     }}
   >
-    {selectedCustomer ? (
-      <div className="flex items-center gap-2">
-        <img
-          src={getImageUrl(selectedCustomer.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.name)}`}
-          className="w-6 h-6 rounded-full"
-          alt="Profile"
-        />
-        <span>{selectedCustomer.name}</span>
-        <span className={selectedCustomer.is_active ? "text-green-500" : "text-red-500"}>
-          {selectedCustomer.is_active ? "🟢 Active" : "🔴 Inactive"}
-        </span>
-      </div>
-    ) : (
-      <span className="text-gray-500">
-        {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+   {selectedCustomer ? (
+  <div className="flex items-center justify-between gap-2 w-full">
+    <div className="flex items-center gap-2">
+      <img
+        src={getImageUrl(selectedCustomer.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.name)}`}
+        className="w-6 h-6 rounded-full"
+        alt="Profile"
+      />
+      <span className="text-sm">{selectedCustomer.name}</span>
+      <span className={`text-xs ${selectedCustomer.is_active ? "text-green-500" : "text-red-500"}`}>
+        {selectedCustomer.is_active ? "🟢 Active" : "🔴 Inactive"}
       </span>
-    )}
+    </div>
+    <button
+      className="text-gray-400 hover:text-red-600 text-sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        setSelectedCustomer(null);
+      }}
+    >
+      ❌
+    </button>
+  </div>
+) : (
+  <span className="text-gray-500 text-sm">
+    {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+  </span>
+)}
+
   </div>
 
   {dropdownOpen && (
