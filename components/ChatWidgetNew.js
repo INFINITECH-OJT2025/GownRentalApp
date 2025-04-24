@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { MessageSquare } from "lucide-react";
 
 const getImageUrl = (img) => {
-  if (!img) return null;
+  if (!img || img.trim() === "") return null;
   return img.startsWith("http")
     ? img
     : `${process.env.NEXT_PUBLIC_BACKEND_URL}/storage/profile_pictures/${img}`;
 };
+
 
 export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessage, setLoading, setChatAllowed, chatLoading }) {
   const popupRef = useRef(null);
@@ -20,6 +21,33 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
   const [showDesktopInbox, setShowDesktopInbox] = useState(false);
 
   const isAdmin = currentUser?.role === "admin";
+
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+const handleSelect = async (user) => {
+  setSelectedCustomer(user);
+  setDropdownOpen(false);
+
+  if (!sessionRef.current) return;
+  const me = sessionRef.current.me;
+
+  const other = new Talk.User({
+    id: String(user.id),
+    name: user.name,
+    email: user.email,
+    photoUrl: getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
+    role: user.role || (isAdmin ? "customer" : "admin"),
+  });
+
+  const conversation = sessionRef.current.getOrCreateConversation(Talk.oneOnOneId(me, other));
+  conversation.setParticipant(me);
+  conversation.setParticipant(other);
+
+  if (popupRef.current && typeof popupRef.current.select === "function") {
+    popupRef.current.select(conversation);
+  }
+};
+
 
   useEffect(() => {
     setLocalHasNewMessage(hasNewMessage);
@@ -309,69 +337,56 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
 
     {/* 👤 Combobox at the top */}
     <div className="p-2 border-b bg-white relative z-[10]">
-      <select
-        className="w-full p-2 border rounded text-sm"
-        onChange={async (e) => {
-          const selectedId = e.target.value;
-          const user = customers.find((u) => String(u.id) === selectedId);
-          if (!user || !sessionRef.current) return;
+    <div className="relative">
+  <div
+    className="w-full p-2 border rounded text-sm bg-white cursor-pointer flex justify-between items-center"
+    onClick={(e) => {
+      e.stopPropagation();
+      setDropdownOpen((prev) => !prev);
+    }}
+  >
+    {selectedCustomer ? (
+      <div className="flex items-center gap-2">
+        <img
+          src={getImageUrl(selectedCustomer.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.name)}`}
+          className="w-6 h-6 rounded-full"
+          alt=""
+        />
+        <span>{selectedCustomer.name}</span>
+        <span className={selectedCustomer.is_active ? "text-green-500" : "text-red-500"}>
+          {selectedCustomer.is_active ? "🟢 Active" : "🔴 Inactive"}
+        </span>
+      </div>
+    ) : (
+      <span className="text-gray-500">{isAdmin ? "Select a customer who logged in today" : "Select to Connect with Admin"}</span>
+    )}
+  </div>
 
-          const me = sessionRef.current.me;
-          const other = new Talk.User({
-            id: String(user.id),
-            name: user.name,
-            email: user.email,
-            photoUrl: getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
-            role: user.role || (isAdmin ? "customer" : "admin"),
-          });
+  {dropdownOpen && (
+    <div className="absolute mt-1 w-full border bg-white shadow-lg z-50 max-h-60 overflow-y-auto">
+      {customers
+        .filter((u) => u.id !== currentUser.id)
+        .map((user) => (
+          <div
+            key={user.id}
+            className="flex items-center gap-3 p-2 hover:bg-gray-100 cursor-pointer"
+            onClick={() => handleSelect(user)}
+          >
+            <img
+              src={getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`}
+              className="w-6 h-6 rounded-full"
+              alt=""
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">{user.name}</span>
+              <span className="text-xs text-gray-500">{user.is_active ? "🟢 Active" : "🔴 Inactive"}</span>
+            </div>
+          </div>
+        ))}
+    </div>
+  )}
+</div>
 
-          const conversation = sessionRef.current.getOrCreateConversation(Talk.oneOnOneId(me, other));
-          conversation.setParticipant(me);
-          conversation.setParticipant(other);
-          if (popupRef.current && typeof popupRef.current.select === "function") {
-            popupRef.current.select(conversation);
-          }
-        }}
-        defaultValue=""
-      >
-        <option value="" disabled>
-          {isAdmin ? "Select a customer who logged in today" : "Select to Connect with Admin"}
-        </option>
-        {customers
-  .filter((u) => u.id !== currentUser.id)
-  .map((user) => {
-    const isAdminUser = user.role === "admin";
-    let label = user.name;
-
-    if (!isAdminUser && user.updated_at) {
-      const loginDate = new Date(user.updated_at);
-      const formattedDate = loginDate.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      });
-      const formattedTime = loginDate.toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      label += ` (${formattedDate} @ ${formattedTime})`;
-      if (user.is_active === 1) {
-        label += " - 🟢 Active";
-      } else if (user.is_active === 0) {
-        label += " - 🔴 Inactive";
-      }
-      
-    }
-
-    return (
-      <option key={user.id} value={user.id}>
-        {label}
-      </option>
-    );
-  })}
-
-
-      </select>
     </div>
 
     {/* 💬 TalkJS Inbox mounts here */}
@@ -421,70 +436,58 @@ export default function ChatWidgetNew({ currentUser, customers = [], hasNewMessa
     
     {/* 🧭 Header with Title + ComboBox */}
     <div className="flex flex-col gap-2 px-4 py-2 border-b bg-white z-[1000002]">
-    {(isAdmin || !isAdmin) && (
-   <select
-   className="w-full p-2 border rounded text-sm"
-   onChange={async (e) => {
-     const selectedId = e.target.value;
-     const user = customers.find((u) => String(u.id) === selectedId);
-     if (!user || !sessionRef.current) return;
+    <div className="relative">
+  <div
+    className="w-full p-2 border rounded text-sm bg-white cursor-pointer flex justify-between items-center"
+    onClick={(e) => {
+      e.stopPropagation();
+      setDropdownOpen((prev) => !prev);
+    }}
+  >
+    {selectedCustomer ? (
+      <div className="flex items-center gap-2">
+        <img
+          src={getImageUrl(selectedCustomer.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCustomer.name)}`}
+          className="w-6 h-6 rounded-full"
+          alt="Profile"
+        />
+        <span>{selectedCustomer.name}</span>
+        <span className={selectedCustomer.is_active ? "text-green-500" : "text-red-500"}>
+          {selectedCustomer.is_active ? "🟢 Active" : "🔴 Inactive"}
+        </span>
+      </div>
+    ) : (
+      <span className="text-gray-500">
+        {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
+      </span>
+    )}
+  </div>
 
-     const me = sessionRef.current.me;
-     const other = new Talk.User({
-       id: String(user.id),
-       name: user.name,
-       email: user.email,
-       photoUrl: getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
-       role: user.role || (isAdmin ? "customer" : "admin"),
-     });
+  {dropdownOpen && (
+    <div className="absolute mt-1 w-full border bg-white shadow-lg z-50 max-h-60 overflow-y-auto">
+      {customers
+        .filter((u) => u.id !== currentUser.id)
+        .map((user) => (
+          <div
+            key={user.id}
+            className="flex items-center gap-3 p-2 hover:bg-gray-100 cursor-pointer"
+            onClick={() => handleSelect(user)}
+          >
+            <img
+              src={getImageUrl(user.image) || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`}
+              className="w-6 h-6 rounded-full"
+              alt="Profile"
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">{user.name}</span>
+              <span className="text-xs text-gray-500">{user.is_active ? "🟢 Active now" : "🔴 Inactive"}</span>
+            </div>
+          </div>
+        ))}
+    </div>
+  )}
+</div>
 
-     const conversation = sessionRef.current.getOrCreateConversation(Talk.oneOnOneId(me, other));
-     conversation.setParticipant(me);
-     conversation.setParticipant(other);
-     if (popupRef.current && typeof popupRef.current.select === "function") {
-      popupRef.current.select(conversation);
-    }
-   }}
-   defaultValue=""
- >
-   <option value="" disabled>
-     {isAdmin ? "Select a customer who logged in today" : "Chat with admin"}
-   </option>
-   {customers
-  .filter((u) => u.id !== currentUser.id)
-  .map((user) => {
-    const isAdminUser = user.role === "admin";
-    let label = user.name;
-
-    if (!isAdminUser && user.updated_at) {
-      const loginDate = new Date(user.updated_at);
-      const formattedDate = loginDate.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      });
-      const formattedTime = loginDate.toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      label += ` (${formattedDate} @ ${formattedTime})`;
-if (user.is_active) {
-  label += " - 🟢 Active now";
-}
-
-    }
-
-    return (
-      <option key={user.id} value={user.id}>
-        {label}
-      </option>
-    );
-  })}
-
-
- </select>
-
-)}
     </div>
 
     {/* 💬 TalkJS chat container */}
