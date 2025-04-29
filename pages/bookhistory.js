@@ -567,54 +567,60 @@ const handleShowProduct = (bookingRow) => {
                 </button>
           
                 {row.gcash_receipt ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShowReceipt(row.gcash_receipt);
-                    }}
-                    className="w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md text-white bg-green-600 hover:bg-green-700 transition text-sm"
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShowReceipt(row.gcash_receipt);
+                  }}
+                  className="w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md text-white bg-green-600 hover:bg-green-700 transition text-sm"
+                >
+                  Receipt
+                </button>
+              ) : row.status === "canceled" ? (
+                <button
+                  disabled
+                  className="w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md bg-gray-300 text-red-600 font-semibold cursor-not-allowed text-sm text-center"
+                >
+                  Upload Unavailable
+                </button>
+              ) : parseInt(row.product?.stock) > 0 ? (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id={`file-upload-${row.id}`}
+                    onChange={(event) => handleFileChange(event, row.id)}
+                  />
+                  <label
+                    htmlFor={`file-upload-${row.id}`}
+                    className="w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md text-black bg-gradient-to-b from-white to-orange-600 hover:to-orange-700 cursor-pointer text-sm"
                   >
-                    Receipt
-                  </button>
-                ) : row.status === "pending" && parseInt(row.product?.stock) > 0 ? (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      id={`file-upload-${row.id}`}
-                      onChange={(event) => handleFileChange(event, row.id)}
-                      disabled={row.status === "canceled"}
-                    />
-                    <label
-                      htmlFor={`file-upload-${row.id}`}
-                      className={`w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md text-black bg-gradient-to-b from-white to-orange-600 hover:to-orange-700 cursor-pointer text-sm`}
-                    >
-                      <Upload size={16} />
-                      Upload
-                    </label>
+                    <Upload size={16} />
+                    Upload
+                  </label>
 
-                    {selectedFile && selectedBookingId === row.id && (
-                      <button
-                        onClick={handleUpload}
-                        disabled={loadingAction === row.id}
-                        className={`w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md text-white transition text-sm ${
-                          loadingAction === row.id ? "bg-gray-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-                        }`}
-                      >
-                        <Save size={16} />
-                        Save
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    disabled
-                    className="w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md bg-gray-300 text-red-600 font-semibold cursor-not-allowed text-sm text-center"
-                  >
-                    Out of stock
-                  </button>
-                )}
+                  {selectedFile && selectedBookingId === row.id && (
+                    <button
+                      onClick={handleUpload}
+                      disabled={loadingAction === row.id}
+                      className={`w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md text-white transition text-sm ${
+                        loadingAction === row.id ? "bg-gray-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                      }`}
+                    >
+                      <Save size={16} />
+                      Save
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  disabled
+                  className="w-32 px-3 py-1 flex items-center gap-1 justify-center rounded-md bg-gray-300 text-red-600 font-semibold cursor-not-allowed text-sm text-center"
+                >
+                  Out of stock
+                </button>
+              )}
 
                 {/* ⭐ Review */}
                 {row.status === "returned" ? (

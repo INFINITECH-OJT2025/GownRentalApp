@@ -221,7 +221,8 @@ export default function LandingPage() {
                }
              };
              
-             const filteredProducts = sortedProducts
+         
+             const filteredWithoutSearch = sortedProducts
              .filter((product) => {
                if (sortByDate === "best-seller") {
                  return product.returned_count > 0;
@@ -234,25 +235,31 @@ export default function LandingPage() {
                }
                return true;
              })
-         .filter((product) =>
-             (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
-             product.price <= priceRange &&
-             (product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-             product.category?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-             product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
-         );
-         const bestSellerRankMap =
-         sortByDate === "best-seller"
-           ? filteredProducts
-               .filter(product => product.returned_count > 0)
-               .sort((a, b) => b.returned_count - a.returned_count)
-               .reduce((acc, product, i) => {
-                 acc[product.id] = i + 1; // Global Top N
-                 return acc;
-               }, {})
-           : {};
-       
+             .filter((product) =>
+               (selectedCategories.length === 0 || selectedCategories.includes(product.category)) &&
+               product.price <= priceRange
+             );
            
+             const filteredProducts = filteredWithoutSearch.filter((product) =>
+               product.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               product.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               product.description?.toLowerCase().includes(searchQuery.toLowerCase())
+             );
+             
+             const isSearchingName = !categories.some(cat => cat.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+
+
+             const bestSellerRankMap =
+               sortByDate === "best-seller"
+                 ? (isSearchingName ? filteredWithoutSearch : filteredProducts)
+                     .filter(product => product.returned_count > 0)
+                     .sort((a, b) => b.returned_count - a.returned_count)
+                     .reduce((acc, product, i) => {
+                       acc[product.id] = i + 1;
+                       return acc;
+                     }, {})
+                 : {};
+             
            const inStockItemsPerPage = 6;
            const outOfStockItemsPerPage = 3;
           
