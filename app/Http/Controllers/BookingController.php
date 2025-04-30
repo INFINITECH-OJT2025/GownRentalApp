@@ -45,7 +45,8 @@ class BookingController extends Controller
                 'sizes' => $booking->sizes,
                 'start_date' => $booking->start_date, 
                 'end_date' => $booking->end_date, 
-                'discounted_price' => (float) ($booking->discounted_price ?? $booking->total_price),
+                'discounted_price' => $booking->discounted_price !== null ? (float) $booking->discounted_price : 0.00,
+
                 'total_price' => (float) $booking->total_price,
                 'added_price' => (float) $booking->added_price,
                 'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
@@ -123,7 +124,6 @@ public function userBookings(Request $request)
                     'description' => $booking->product->description,
                     'image_url' => asset('storage/' . $booking->product->image),
                     'price' => (float) ($booking->product->price ?? 0),
-                    'discounted_price' => (float) ($booking->product->discounted_price ?? 0),
                     'stock' => (int) ($booking->product->stock ?? 0), // ✅ Add this line
                 ] : null,
                 'sizes' => $booking->sizes,
@@ -133,6 +133,7 @@ public function userBookings(Request $request)
                 'status' => $booking->status,
                 'total_price' => (float) $totalPrice, // Make sure to include total_price
                 'added_price' => (float) $addedPrice,
+                'discounted_price' => (float) ($booking->discounted_price ?? 0),
                 'voucher_fee' => (float) ($booking->voucher_fee ?? 0),
                 'created_at' => $booking->created_at,
                 'updated_at' => $booking->updated_at,
@@ -281,7 +282,7 @@ public function store(Request $request)
         'end_date' => $endDate,
         'added_price' => $validated['added_price'],
         'total_price' => $validated['total_price'] - $validated['added_price'],
-        'discounted_price' => $validated['discounted_price'] ?? $validated['total_price'],
+        'discounted_price' => $request->filled('discounted_price') ? $validated['discounted_price'] : 0.00,
         'voucher_fee' => $validated['voucher_fee'] ?? 0.00,
         'reference_number' => $referenceNumber,
         'sizes' => $validated['sizes'], // ✅ Store selected size in DB
