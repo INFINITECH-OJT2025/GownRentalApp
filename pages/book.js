@@ -375,23 +375,32 @@ const applyDiscount = async () => {
                 </p>
                   {/* ✅ Show Discounted Price from Bookings Table */}
                   <p><strong>Original Price:</strong> 
-                  <span className="text-red-500">
-                      ₱{booking?.product?.price ? Number(booking.product.price).toFixed(2) : "0.00"}
-                  </span>
-              </p>
-              <p><strong>Discounted Price:</strong> 
-                  <span className="text-green-600">
-                      ₱{booking?.product?.discounted_price ? Number(booking.product.discounted_price).toFixed(2) : "0.00"}
-                  </span>
-              </p>
-
-                  <p><strong>Added Rental Price:</strong> <span className="text-pink-600">₱{Number(booking.added_price).toFixed(2)}</span></p>
-
-                  <p><strong>Final Price:</strong> 
-                    <span  className="ml-1 bg-pink-200 text-pink-700 px-2 py-1 rounded-md">
-                        ₱{!finalPrice || isNaN(finalPrice) ? "0.00" : Number(finalPrice).toFixed(2)}
+                    <span className="text-red-500">
+                      ₱{booking?.product?.price ? Number(booking.product.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                     </span>
                   </p>
+
+                  <p><strong>Discounted Price:</strong> 
+                  <span className="text-green-600">
+                    ₱{booking?.discounted_price && booking?.discounted_price !== booking?.product?.price
+                      ? Number(booking.discounted_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      : "0.00"}
+                  </span>
+                </p>
+
+
+                  <p><strong>Added Rental Price:</strong> 
+                    <span className="text-pink-600">
+                      ₱{booking?.added_price ? Number(booking.added_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </span>
+                  </p>
+
+                  <p><strong>Final Price:</strong> 
+                    <span className="ml-1 bg-pink-200 text-pink-700 px-2 py-1 rounded-md">
+                      ₱{!finalPrice || isNaN(finalPrice) ? "0.00" : Number(finalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </p>
+
               </div>
           </section>
 
@@ -456,8 +465,9 @@ const applyDiscount = async () => {
 
                         {/* Display new total price after applying points */}
                         <p className="text-gray-700 mt-2">
-                          New Total Price: <strong>₱{finalPrice.toFixed(2)}</strong>
+                          New Total Price: <strong>₱{!finalPrice || isNaN(finalPrice) ? "0.00" : Number(finalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                         </p>
+
 
                         {/* Apply Discount Button */}
                         <button

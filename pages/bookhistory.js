@@ -489,12 +489,21 @@ const handleShowProduct = (bookingRow) => {
         key: "price",
       },
       {
-        name: "Discounted Price",
-        selector: (row) => `₱${Number(row.product?.discounted_price).toLocaleString()}`,
+        name: "Discount %",
+        selector: (row) => {
+          const price = Number(row.product?.price || 0);
+          const discounted = Number(row.discounted_price || 0);
+          if (!price || price <= 0) return "0%";
+      
+          const discountPercent = ((price - discounted) / price) * 100;
+          return `${discountPercent.toFixed(2)}%`; // 🔥 2 decimal points
+        },
         sortable: true,
         width: "90px",
         key: "discounted_price",
       },
+      
+      
       {
         name: "Added Price",
         selector: (row) => `₱${Number(row.added_price).toLocaleString()}`,

@@ -466,7 +466,7 @@ const finalProductId = matchedSize?.product_id || product.id; // Fallback in cas
         added_price: rentalDetails.addedPrice,
         total_price: rentalDetails.totalPrice,
         discounted_price: product.discounted_price || product.price,
-        sizes: selectedSize, // ✅ Include selected size
+        sizes: selectedSize, 
       },
       {
         headers: { Authorization: `Bearer ${token}` },

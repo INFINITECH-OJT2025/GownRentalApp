@@ -278,7 +278,7 @@ export default function ProfilePage() {
                     <div className="p-6 bg-white shadow-lg rounded-lg">
                                 <h3 className="text-2xl font-bold text-pink-900">Loyalty & Rewards</h3>
                                 <p className="text-gray-700 mt-2">
-                                    Earn 100 loyalty points for every 3 approved bookings. You can use them to get a Reward/Voucher Discount on your booking fee.
+                                    Earn 100 loyalty points for every 3 returned bookings. You can use them to get a Reward/Voucher Discount on your booking fee.
                                 </p>
                                 <div className="mt-4 p-4 border rounded-lg bg-pink-100">
                                     <h4 className="text-xl font-semibold text-pink-900">Total of Successful Booking/s</h4>
